@@ -47,6 +47,11 @@ class LgRemoteControl extends LitElement {
     private valueDisplayTimeout: NodeJS.Timeout;
     private homeisLongPress: boolean = false;
     private homelongPressTimer: any; // Tipo generico, ma puoi specificare il tipo corretto se lo conosci
+    private _directionHoldTimer: any = null;
+    private _directionRepeatTimer: any = null;
+    private _directionIsRepeating: boolean = false;
+    private _activeDirection: string | null = null;
+    private _ignoreNextClickUntil: number = 0;
 
 
     static getConfigElement() {
@@ -219,13 +224,37 @@ class LgRemoteControl extends LitElement {
                                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 79"><path d="m 30 15 a 10 10 0 0 1 20 0 a 15 15 0 0 0 15 15 a 10 10 0 0 1 0 20 a 15 15 0 0 0 -15 15 a 10 10 0 0 1 -20 0 a 15 15 0 0 0 -15 -15 a 10 10 0 0 1 0 -20 a 15 15 0 0 0 15 -15" fill="var(--remote-button-color)" stroke="#000000" stroke-width="0" /></svg>
                                     </div>
                                     <button class="btn ripple item_sound" @click=${() => this._show_sound_output = true}><ha-icon icon="mdi:speaker"/></button>
-                                    <button class="btn ripple item_up" style="background-color: transparent;" @click=${() => this._button("UP")}><ha-icon icon="mdi:chevron-up"/></button>
+                                    <button class="btn ripple item_up" style="background-color: transparent; touch-action: none;"
+                                        @pointerdown=${(e: PointerEvent) => this._onDirectionPointerDown("UP", e)}
+                                        @pointerup=${(e: PointerEvent) => this._onDirectionPointerUp(e)}
+                                        @pointercancel=${(e: PointerEvent) => this._onDirectionPointerCancel(e)}
+                                        @pointerleave=${(e: PointerEvent) => this._onDirectionPointerCancel(e)}
+                                        @click=${(e: Event) => this._onDirectionClick("UP", e)}
+                                    ><ha-icon icon="mdi:chevron-up"/></button>
                                     <button class="btn ripple item_input" @click=${() => this._show_inputs = true}><ha-icon icon="mdi:import"/></button>
-                                    <button class="btn ripple item_2_sx" style="background-color: transparent;" @click=${() => this._button("LEFT")}><ha-icon icon="mdi:chevron-left"/></button>
+                                    <button class="btn ripple item_2_sx" style="background-color: transparent; touch-action: none;"
+                                        @pointerdown=${(e: PointerEvent) => this._onDirectionPointerDown("LEFT", e)}
+                                        @pointerup=${(e: PointerEvent) => this._onDirectionPointerUp(e)}
+                                        @pointercancel=${(e: PointerEvent) => this._onDirectionPointerCancel(e)}
+                                        @pointerleave=${(e: PointerEvent) => this._onDirectionPointerCancel(e)}
+                                        @click=${(e: Event) => this._onDirectionClick("LEFT", e)}
+                                    ><ha-icon icon="mdi:chevron-left"/></button>
                                     <div class="ok_button ripple item_2_c" style="border: solid 2px ${backgroundColor}"  @click=${() => this._button("ENTER")}>${this._show_vol_text === true ? this.volume_value : 'OK'}</div>
-                                    <button class="btn ripple item_right" style="background-color: transparent;" @click=${() => this._button("RIGHT")}><ha-icon icon="mdi:chevron-right"/></button>
+                                    <button class="btn ripple item_right" style="background-color: transparent; touch-action: none;"
+                                        @pointerdown=${(e: PointerEvent) => this._onDirectionPointerDown("RIGHT", e)}
+                                        @pointerup=${(e: PointerEvent) => this._onDirectionPointerUp(e)}
+                                        @pointercancel=${(e: PointerEvent) => this._onDirectionPointerCancel(e)}
+                                        @pointerleave=${(e: PointerEvent) => this._onDirectionPointerCancel(e)}
+                                        @click=${(e: Event) => this._onDirectionClick("RIGHT", e)}
+                                    ><ha-icon icon="mdi:chevron-right"/></button>
                                     <button class="btn ripple item_back" @click=${() => this._button("BACK")}><ha-icon icon="mdi:undo-variant"/></button>
-                                    <button class="btn ripple item_down" style="background-color: transparent;" @click=${() => this._button("DOWN")}><ha-icon icon="mdi:chevron-down"/></button>
+                                    <button class="btn ripple item_down" style="background-color: transparent; touch-action: none;"
+                                        @pointerdown=${(e: PointerEvent) => this._onDirectionPointerDown("DOWN", e)}
+                                        @pointerup=${(e: PointerEvent) => this._onDirectionPointerUp(e)}
+                                        @pointercancel=${(e: PointerEvent) => this._onDirectionPointerCancel(e)}
+                                        @pointerleave=${(e: PointerEvent) => this._onDirectionPointerCancel(e)}
+                                        @click=${(e: Event) => this._onDirectionClick("DOWN", e)}
+                                    ><ha-icon icon="mdi:chevron-down"/></button>
                                     <button class="btn ripple item_exit" @click=${() => this._button("EXIT")}>EXIT</button>
                                 </div>
                                 <!-- ################################# DIRECTION PAD END ################################# -->
@@ -486,12 +515,103 @@ class LgRemoteControl extends LitElement {
       }, 1000); // Tempo in millisecondi per determinare una pressione prolungata
   }
   
-  _homeButtonUp(event: MouseEvent | TouchEvent) {
-      clearTimeout(this.homelongPressTimer);
-      if (!this.homeisLongPress) {
-          this._button("HOME")
-      }
-  }
+   _homeButtonUp(event: MouseEvent | TouchEvent) {
+       clearTimeout(this.homelongPressTimer);
+       if (!this.homeisLongPress) {
+           this._button("HOME")
+       }
+   }
+
+    private get _repeatDelay(): number {
+        const v = this.config?.repeat?.delay ?? this.config?.hold_delay ?? 400;
+        const n = Number(v);
+        return isNaN(n) ? 400 : Math.max(100, Math.min(1000, n));
+    }
+
+    private get _repeatInterval(): number {
+        const v = this.config?.repeat?.interval ?? this.config?.hold_interval ?? 150;
+        const n = Number(v);
+        return isNaN(n) ? 150 : Math.max(50, Math.min(500, n));
+    }
+
+    private get _debugEnabled(): boolean {
+        return !!(this.config?.debug || this.config?.repeat?.debug || (typeof window !== 'undefined' && window.location.search.includes('lg_debug')));
+    }
+
+    private _debugLog(...args: any[]) {
+        if (this._debugEnabled) {
+            console.log(`[lg-remote:${this.config?.entity ?? 'unknown'}]`, ...args);
+        }
+    }
+
+    private _onDirectionPointerDown(direction: string, e: PointerEvent) {
+        this._debugLog(`pointerDown dir=${direction} delay=${this._repeatDelay} interval=${this._repeatInterval} ptrId=${(e as any).pointerId} type=${e.pointerType}`);
+        // prevent scrolling / context menu
+        try { (e as any).preventDefault(); } catch {}
+        const target = e.currentTarget as HTMLElement;
+        try { target.setPointerCapture((e as PointerEvent).pointerId); } catch {}
+        this._activeDirection = direction;
+        this._directionIsRepeating = false;
+        clearTimeout(this._directionHoldTimer);
+        clearInterval(this._directionRepeatTimer);
+        this._directionHoldTimer = setTimeout(() => {
+            this._debugLog(`hold triggered dir=${direction} -> start repeat every ${this._repeatInterval}ms`);
+            this._directionIsRepeating = true;
+            this._button(direction);
+            let count = 1;
+            this._directionRepeatTimer = setInterval(() => {
+                count++;
+                this._debugLog(`repeat #${count} dir=${direction}`);
+                this._button(direction);
+            }, this._repeatInterval);
+        }, this._repeatDelay);
+    }
+
+    private _onDirectionPointerUp(e: PointerEvent) {
+        this._debugLog(`pointerUp active=${this._activeDirection} isRepeating=${this._directionIsRepeating} ptrId=${(e as any).pointerId}`);
+        try { (e as any).preventDefault(); } catch {}
+        const target = e.currentTarget as HTMLElement;
+        try { target.releasePointerCapture((e as PointerEvent).pointerId); } catch {}
+        clearTimeout(this._directionHoldTimer);
+        clearInterval(this._directionRepeatTimer);
+        if (this._activeDirection && !this._directionIsRepeating) {
+            this._debugLog(`short tap -> single fire ${this._activeDirection}`);
+            this._button(this._activeDirection);
+        } else if (this._activeDirection && this._directionIsRepeating) {
+            this._debugLog(`hold release -> stop repeat ${this._activeDirection}`);
+        }
+        // suppress synthetic click that follows pointerup
+        this._ignoreNextClickUntil = Date.now() + 600;
+        this._activeDirection = null;
+        this._directionIsRepeating = false;
+    }
+
+    private _onDirectionPointerCancel(e: PointerEvent) {
+        this._debugLog(`pointerCancel/Leave active=${this._activeDirection} isRepeating=${this._directionIsRepeating}`);
+        clearTimeout(this._directionHoldTimer);
+        clearInterval(this._directionRepeatTimer);
+        this._activeDirection = null;
+        this._directionIsRepeating = false;
+        this._ignoreNextClickUntil = Date.now() + 600;
+    }
+
+    private _onDirectionClick(direction: string, e: Event) {
+        // fallback for keyboard / accessibility; ignore if just handled via pointer
+        if (Date.now() < this._ignoreNextClickUntil) {
+            this._debugLog(`click suppressed dir=${direction} (pointer handled)`);
+            try { e.preventDefault(); e.stopPropagation(); } catch {}
+            return;
+        }
+        this._debugLog(`click fallback dir=${direction}`);
+        this._button(direction);
+    }
+
+    disconnectedCallback() {
+        super.disconnectedCallback();
+        clearTimeout(this._directionHoldTimer);
+        clearInterval(this._directionRepeatTimer);
+        clearTimeout(this.homelongPressTimer);
+    }
 
 
     _select_source(source) {
@@ -514,6 +634,9 @@ class LgRemoteControl extends LitElement {
             throw new Error("Invalid configuration");
         }
         this.config = config;
+        if (config?.debug || config?.repeat?.debug) {
+            console.log(`[lg-remote:${config.entity}] debug enabled`, config.repeat ?? config);
+        }
     }
 
     getCardSize() {
@@ -527,6 +650,9 @@ class LgRemoteControl extends LitElement {
             const keyConfig = this.config.keys[key];
             serviceToUse = keyConfig["service"];
             serviceDataToUse = keyConfig["data"];
+        }
+        if (this._debugEnabled) {
+            console.log(`[lg-remote:${this.config?.entity}] callService key=${key} service=${serviceToUse}`, serviceDataToUse);
         }
         this.hass.callService(
           serviceToUse.split(".")[0],

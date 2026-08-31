@@ -283,6 +283,63 @@ class LgRemoteControlEditor extends LitElement {
         `;
   }
 
+  setRepeatConfig(repeat) {
+    const delay = repeat?.delay ?? 400;
+    const interval = repeat?.interval ?? 150;
+    const debug = repeat?.debug ?? this._config?.debug ?? false;
+    return html`
+          <div class="heading">Button Hold Repeat:</div>
+          <br>
+          <label for="repeat_delay">Hold delay before repeat: ${delay}ms</label><br>
+          <input type="range" min="100" max="1000" step="50" .value="${delay}" id="repeat_delay" name="delay" @input=${this.repeatConfigChanged} style="width: 40ch;">
+          </input>
+          <br>
+          <br>
+          <label for="repeat_interval">Repeat interval: ${interval}ms</label><br>
+          <input type="range" min="50" max="500" step="25" .value="${interval}" id="repeat_interval" name="interval" @input=${this.repeatConfigChanged} style="width: 40ch;">
+          </input>
+          <br>
+          <br>
+          <label for="repeat_debug" style="display:flex; align-items:center; gap:0.6em;">
+            <input type="checkbox" id="repeat_debug" name="debug" .checked=${!!debug} @change=${this.repeatDebugChanged} />
+            Enable debug logging (console)
+          </label>
+          <br>
+          <small style="opacity:0.7">Hold D-pad to scroll faster. Short tap = single step. Debug shows fires in browser console (F12).</small>
+          <br>
+          <br>
+        `;
+  }
+
+  repeatConfigChanged(ev) {
+    const _config = Object.assign({}, this._config);
+    _config["repeat"] = { ...(_config["repeat"] ?? {}) };
+    const val = parseInt(ev.target.value, 10);
+    _config["repeat"][ev.target.name] = isNaN(val) ? ev.target.value : val;
+    this._config = _config;
+    const event = new CustomEvent("config-changed", {
+      detail: { config: _config },
+      bubbles: true,
+      composed: true,
+    });
+    this.dispatchEvent(event);
+  }
+
+  repeatDebugChanged(ev) {
+    const _config = Object.assign({}, this._config);
+    _config["repeat"] = { ...(_config["repeat"] ?? {}) };
+    _config["repeat"]["debug"] = ev.target.checked;
+    // also set top-level for backward compat
+    _config["debug"] = ev.target.checked;
+    this._config = _config;
+    const event = new CustomEvent("config-changed", {
+      detail: { config: _config },
+      bubbles: true,
+      composed: true,
+    });
+    this.dispatchEvent(event);
+  }
+
   getDeviceAVReceiverDropdown(optionvalue) {
     const familykeys = [...AvReceiverdevicemap.keys()];
     const blankEntity = (!this._config.av_receiver_family || this._config.av_receiver_family === '')
@@ -362,6 +419,7 @@ class LgRemoteControlEditor extends LitElement {
       ${this.getDeviceAVReceiverDropdown(this._config.av_receiver_family)}
       ${this.getMediaPlayerEntityDropdown(this._config.av_receiver_family)}
       ${this.setDimensions(this._config.dimensions??{})}
+      ${this.setRepeatConfig(this._config.repeat??{})}
       <br>
       <p>Other functionalities must be configured manually in code editor</p>
       <p>references to <a href="https://github.com/madmicio/LG-WebOS-Remote-Control">https://github.com/madmicio/LG-WebOS-Remote-Control</a></p>
