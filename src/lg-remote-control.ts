@@ -808,10 +808,10 @@ class LgRemoteControl extends LitElement {
     }
     this.config = {
       ...config,
-      dimensions: { ...(config.dimensions ?? {}) },
-      colors: { ...(config.colors ?? {}) },
-      repeat: { ...(config.repeat ?? {}) },
-      keys: { ...(config.keys ?? {}) },
+      dimensions: { ...config.dimensions },
+      colors: { ...config.colors },
+      repeat: { ...config.repeat },
+      keys: { ...config.keys },
     };
     if (this.config?.debug || this.config?.repeat?.debug) {
       console.log(
