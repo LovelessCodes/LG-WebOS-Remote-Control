@@ -52,6 +52,11 @@ class LgRemoteControl extends LitElement {
     private _directionIsRepeating: boolean = false;
     private _activeDirection: string | null = null;
     private _ignoreNextClickUntil: number = 0;
+    private _volumeHoldTimer: any = null;
+    private _volumeRepeatTimer: any = null;
+    private _volumeIsRepeating: boolean = false;
+    private _activeVolumeService: string | null = null;
+    private _ignoreVolumeClickUntil: number = 0;
 
 
     static getConfigElement() {
@@ -294,7 +299,13 @@ class LgRemoteControl extends LitElement {
                         <!-- ################################# COLORED BUTTONS END ################################# -->
 
                         <div class="grid-container-volume-channel-control" >
-                            <button class="btn ripple" id="plusButton"  style="border-radius: 50% 50% 0px 0px; margin: 0px auto 0px auto; height: 100%;" }><ha-icon icon="mdi:plus"/></button>
+                            <button class="btn ripple" id="plusButton" style="border-radius: 50% 50% 0px 0px; margin: 0px auto 0px auto; height: 100%; touch-action: none;"
+                                @pointerdown=${(e: PointerEvent) => this._onVolumePointerDown("volume_up", e)}
+                                @pointerup=${(e: PointerEvent) => this._onVolumePointerUp(e)}
+                                @pointercancel=${(e: PointerEvent) => this._onVolumePointerCancel(e)}
+                                @pointerleave=${(e: PointerEvent) => this._onVolumePointerCancel(e)}
+                                @click=${(e: Event) => this._onVolumeClick("volume_up", e)}
+                            ><ha-icon icon="mdi:plus"/></button>
                             <button class="btn-flat flat-high ripple" id="homeButton" style="margin-top: 0px; height: 50%;" @mousedown=${(e) => this._homeButtonDown(e)} @touchstart=${(e) => this._homeButtonDown(e)} @mouseup=${(e) => this._homeButtonUp(e)} @touchend=${(e) => this._homeButtonUp(e)}>
     <ha-icon icon="mdi:home"></ha-icon>
 </button>
@@ -310,7 +321,13 @@ class LgRemoteControl extends LitElement {
                             <button class="btn" style="border-radius: 0px; cursor: default; margin: 0px auto 0px auto; height: 100%;"><ha-icon icon="${stateObj.attributes.is_volume_muted === true ? 'mdi:volume-off' : 'mdi:volume-high'}"/></button>
                             <button class="btn ripple" Style="color:${stateObj.attributes.is_volume_muted === true ? 'red' : ''}; height: 100%;" @click=${() => this._button("MUTE")}><span class="${stateObj.attributes.is_volume_muted === true ? 'blink' : ''}"><ha-icon icon="mdi:volume-mute"></span></button>
                             <button class="btn" style="border-radius: 0px; cursor: default; margin: 0px auto 0px auto; height: 100%;"><ha-icon icon="mdi:parking"/></button>
-                            <button class="btn ripple" id="minusButton" style="border-radius: 0px 0px 50% 50%;  margin: 0px auto 0px auto; height: 100%;" ><ha-icon icon="mdi:minus"/></button>
+                            <button class="btn ripple" id="minusButton" style="border-radius: 0px 0px 50% 50%; margin: 0px auto 0px auto; height: 100%; touch-action: none;"
+                                @pointerdown=${(e: PointerEvent) => this._onVolumePointerDown("volume_down", e)}
+                                @pointerup=${(e: PointerEvent) => this._onVolumePointerUp(e)}
+                                @pointercancel=${(e: PointerEvent) => this._onVolumePointerCancel(e)}
+                                @pointerleave=${(e: PointerEvent) => this._onVolumePointerCancel(e)}
+                                @click=${(e: Event) => this._onVolumeClick("volume_down", e)}
+                            ><ha-icon icon="mdi:minus"/></button>
                             <button class="btn-flat flat-high ripple" style="margin-bottom: 0px; height: 50%;" @click=${() => this._button("INFO")}><ha-icon icon="mdi:information-variant"/></button>
                             <button class="btn ripple" style="border-radius: 0px 0px 50% 50%;  margin: 0px auto 0px auto; height: 100%;"  @click=${() => this._button("CHANNELDOWN")}><ha-icon icon="mdi:chevron-down"/></button>
                         </div>
@@ -384,114 +401,9 @@ class LgRemoteControl extends LitElement {
 
     firstUpdated(changedProperties) {
         super.firstUpdated(changedProperties);
-        const plusButton = this.shadowRoot.querySelector("#plusButton");
-        const minusButton = this.shadowRoot.querySelector("#minusButton");
-        const interval = this.output_entity === this.config.ampli_entity ? 250 : 100;
-        let longPressTimer;
-        let isLongPress = false;
-
-        // Funzione per aggiornare e chiamare il servizio
-        const updateValue = (service) => {
-            this.callServiceFromConfig(service.toUpperCase(), `media_player.${service}`, {
-                entity_id: this.output_entity,
-            });
-        };
-
-        // Gestore per il pulsante '+' (plusButton)
-        plusButton.addEventListener("mousedown", () => {
-            if (!isNaN(this.volume_value)) {
-                isLongPress = false;
-                this._show_vol_text = true;
-                longPressTimer = setTimeout(() => {
-                    isLongPress = true;
-                    updateValue("volume_up");
-                    longPressTimer = setInterval(() => updateValue("volume_up"), interval);
-                }, 500);
-            }
-        });
-
-        plusButton.addEventListener("touchstart", (e) => {
-            e.preventDefault();
-            if (!isNaN(this.volume_value)) {
-                isLongPress = false;
-                this._show_vol_text = true;
-                longPressTimer = setTimeout(() => {
-                    isLongPress = true;
-                    updateValue("volume_up");
-                    longPressTimer = setInterval(() => updateValue("volume_up"), interval);
-                }, 500);
-            }
-        });
-
-        plusButton.addEventListener("mouseup", () => {
-            clearTimeout(longPressTimer);
-            if (!isLongPress) {
-                updateValue("volume_up");
-            }
-            clearInterval(longPressTimer);
-            this.valueDisplayTimeout = setTimeout(() => {
-                this._show_vol_text = false;
-            }, 500);
-        });
-
-        plusButton.addEventListener("touchend", () => {
-            clearTimeout(longPressTimer);
-            if (!isLongPress) {
-                updateValue("volume_up");
-            }
-            clearInterval(longPressTimer);
-            this.valueDisplayTimeout = setTimeout(() => {
-                this._show_vol_text = false;
-            }, 500);
-        });
-
-        // Gestore per il pulsante '-' (minusButton)
-        minusButton.addEventListener("mousedown", () => {
-            if (!isNaN(this.volume_value)) {
-                isLongPress = false;
-                this._show_vol_text = true;
-                longPressTimer = setTimeout(() => {
-                    isLongPress = true;
-                    updateValue("volume_down");
-                    longPressTimer = setInterval(() => updateValue("volume_down"), interval);
-                }, 400);
-            }
-        });
-
-        minusButton.addEventListener("touchstart", (e) => {
-            e.preventDefault();
-            if (!isNaN(this.volume_value)) {
-                isLongPress = false;
-                this._show_vol_text = true;
-                longPressTimer = setTimeout(() => {
-                    isLongPress = true;
-                    updateValue("volume_down");
-                    longPressTimer = setInterval(() => updateValue("volume_down"), interval);
-                }, 400);
-            }
-        });
-
-        minusButton.addEventListener("mouseup", () => {
-            clearTimeout(longPressTimer);
-            if (!isLongPress) {
-                updateValue("volume_down");
-            }
-            clearInterval(longPressTimer);
-            this.valueDisplayTimeout = setTimeout(() => {
-                this._show_vol_text = false;
-            }, 500);
-        });
-
-        minusButton.addEventListener("touchend", () => {
-            clearTimeout(longPressTimer);
-            if (!isLongPress) {
-                updateValue("volume_down");
-            }
-            clearInterval(longPressTimer);
-            this.valueDisplayTimeout = setTimeout(() => {
-                this._show_vol_text = false;
-            }, 500);
-        });
+        // volume hold now handled via pointer events in template (_onVolumePointerDown etc.)
+        // kept for future init if needed; no legacy mousedown/touch listeners (removed to avoid double-fire)
+        this._debugLog(`firstUpdated volume hold: delay=${this._volumeDelay} interval=${this._volumeInterval}`);
     }
 
     updated(changedProperties) {
@@ -542,6 +454,24 @@ class LgRemoteControl extends LitElement {
         if (this._debugEnabled) {
             console.log(`[lg-remote:${this.config?.entity ?? 'unknown'}]`, ...args);
         }
+    }
+
+    private get _volumeDelay(): number {
+        const v = this.config?.repeat?.volume_delay ?? this.config?.repeat?.delay ?? this.config?.hold_delay ?? 400;
+        const n = Number(v);
+        return isNaN(n) ? 400 : Math.max(100, Math.min(1000, n));
+    }
+
+    private get _volumeInterval(): number {
+        // if user configured generic repeat interval or volume-specific, use it (respects debug config)
+        const configured = this.config?.repeat?.volume_interval ?? this.config?.repeat?.interval ?? this.config?.hold_interval;
+        if (configured !== undefined && configured !== null && `${configured}` !== '') {
+            const n = Number(configured);
+            return isNaN(n) ? 150 : Math.max(50, Math.min(500, n));
+        }
+        // fallback to original ampli logic (250 for ampli, 150 for TV - slightly slower than old 100 to avoid flooding)
+        const isAmpli = this.output_entity && this.config?.ampli_entity && this.output_entity === this.config.ampli_entity;
+        return isAmpli ? 250 : 150;
     }
 
     private _onDirectionPointerDown(direction: string, e: PointerEvent) {
@@ -606,10 +536,110 @@ class LgRemoteControl extends LitElement {
         this._button(direction);
     }
 
+    private _updateVolume(service: string) {
+        if (isNaN(this.volume_value as any)) {
+            this._debugLog(`volume skip - volume_value NaN`);
+            return;
+        }
+        this._debugLog(`volume fire ${service} entity=${this.output_entity} vol=${this.volume_value}`);
+        this.callServiceFromConfig(service.toUpperCase(), `media_player.${service}`, {
+            entity_id: this.output_entity,
+        });
+        this._show_vol_text = true;
+        this.requestUpdate();
+        clearTimeout(this.valueDisplayTimeout);
+        this.valueDisplayTimeout = setTimeout(() => {
+            this._show_vol_text = false;
+            this.requestUpdate();
+        }, 800);
+    }
+
+    private _onVolumePointerDown(service: string, e: PointerEvent) {
+        if (isNaN(this.volume_value as any)) {
+            this._debugLog(`volume pointerDown ignored - volume_value NaN service=${service}`);
+            return;
+        }
+        this._debugLog(`volume pointerDown service=${service} delay=${this._volumeDelay} interval=${this._volumeInterval} ptrId=${(e as any).pointerId} type=${e.pointerType}`);
+        try { (e as any).preventDefault(); } catch {}
+        const target = e.currentTarget as HTMLElement;
+        try { target.setPointerCapture((e as PointerEvent).pointerId); } catch {}
+        this._activeVolumeService = service;
+        this._volumeIsRepeating = false;
+        clearTimeout(this._volumeHoldTimer);
+        clearInterval(this._volumeRepeatTimer);
+        // show volume immediately
+        this._show_vol_text = true;
+        this.requestUpdate();
+        this._volumeHoldTimer = setTimeout(() => {
+            this._debugLog(`volume hold triggered service=${service} -> start repeat every ${this._volumeInterval}ms`);
+            this._volumeIsRepeating = true;
+            this._updateVolume(service);
+            let count = 1;
+            this._volumeRepeatTimer = setInterval(() => {
+                count++;
+                this._debugLog(`volume repeat #${count} service=${service}`);
+                this._updateVolume(service);
+            }, this._volumeInterval);
+        }, this._volumeDelay);
+    }
+
+    private _onVolumePointerUp(e: PointerEvent) {
+        this._debugLog(`volume pointerUp active=${this._activeVolumeService} isRepeating=${this._volumeIsRepeating} ptrId=${(e as any).pointerId}`);
+        try { (e as any).preventDefault(); } catch {}
+        const target = e.currentTarget as HTMLElement;
+        try { target.releasePointerCapture((e as PointerEvent).pointerId); } catch {}
+        clearTimeout(this._volumeHoldTimer);
+        clearInterval(this._volumeRepeatTimer);
+        if (this._activeVolumeService && !this._volumeIsRepeating) {
+            this._debugLog(`volume short tap -> single fire ${this._activeVolumeService}`);
+            this._updateVolume(this._activeVolumeService);
+        } else if (this._activeVolumeService && this._volumeIsRepeating) {
+            this._debugLog(`volume hold release -> stop repeat ${this._activeVolumeService}`);
+            // keep _show_vol_text visible a bit longer (handled by _updateVolume timeout)
+            clearTimeout(this.valueDisplayTimeout);
+            this.valueDisplayTimeout = setTimeout(() => {
+                this._show_vol_text = false;
+                this.requestUpdate();
+            }, 800);
+        }
+        this._ignoreVolumeClickUntil = Date.now() + 600;
+        this._activeVolumeService = null;
+        this._volumeIsRepeating = false;
+    }
+
+    private _onVolumePointerCancel(e: PointerEvent) {
+        this._debugLog(`volume pointerCancel/Leave active=${this._activeVolumeService} isRepeating=${this._volumeIsRepeating}`);
+        clearTimeout(this._volumeHoldTimer);
+        clearInterval(this._volumeRepeatTimer);
+        this._activeVolumeService = null;
+        this._volumeIsRepeating = false;
+        this._ignoreVolumeClickUntil = Date.now() + 600;
+        // keep vol text a bit then hide
+        clearTimeout(this.valueDisplayTimeout);
+        this.valueDisplayTimeout = setTimeout(() => {
+            this._show_vol_text = false;
+            this.requestUpdate();
+        }, 800);
+    }
+
+    private _onVolumeClick(service: string, e: Event) {
+        if (Date.now() < this._ignoreVolumeClickUntil) {
+            this._debugLog(`volume click suppressed service=${service} (pointer handled)`);
+            try { e.preventDefault(); e.stopPropagation(); } catch {}
+            return;
+        }
+        // also ignore if volume_value NaN
+        if (isNaN(this.volume_value as any)) return;
+        this._debugLog(`volume click fallback service=${service}`);
+        this._updateVolume(service);
+    }
+
     disconnectedCallback() {
         super.disconnectedCallback();
         clearTimeout(this._directionHoldTimer);
         clearInterval(this._directionRepeatTimer);
+        clearTimeout(this._volumeHoldTimer);
+        clearInterval(this._volumeRepeatTimer);
         clearTimeout(this.homelongPressTimer);
     }
 

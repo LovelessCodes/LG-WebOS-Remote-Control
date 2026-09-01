@@ -286,17 +286,30 @@ class LgRemoteControlEditor extends LitElement {
   setRepeatConfig(repeat) {
     const delay = repeat?.delay ?? 400;
     const interval = repeat?.interval ?? 150;
+    const volume_delay = repeat?.volume_delay ?? delay;
+    const volume_interval = repeat?.volume_interval ?? interval;
     const debug = repeat?.debug ?? this._config?.debug ?? false;
+    const hasVolumeOverride = repeat?.volume_delay !== undefined || repeat?.volume_interval !== undefined;
     return html`
           <div class="heading">Button Hold Repeat:</div>
           <br>
-          <label for="repeat_delay">Hold delay before repeat: ${delay}ms</label><br>
+          <label for="repeat_delay">D-pad hold delay: ${delay}ms</label><br>
           <input type="range" min="100" max="1000" step="50" .value="${delay}" id="repeat_delay" name="delay" @input=${this.repeatConfigChanged} style="width: 40ch;">
           </input>
           <br>
           <br>
-          <label for="repeat_interval">Repeat interval: ${interval}ms</label><br>
+          <label for="repeat_interval">D-pad repeat interval: ${interval}ms</label><br>
           <input type="range" min="50" max="500" step="25" .value="${interval}" id="repeat_interval" name="interval" @input=${this.repeatConfigChanged} style="width: 40ch;">
+          </input>
+          <br>
+          <br>
+          <label for="repeat_volume_delay">Volume hold delay: ${volume_delay}ms ${hasVolumeOverride ? '' : '(auto: same as D-pad)'}</label><br>
+          <input type="range" min="100" max="1000" step="50" .value="${volume_delay}" id="repeat_volume_delay" name="volume_delay" @input=${this.repeatConfigChanged} style="width: 40ch;">
+          </input>
+          <br>
+          <br>
+          <label for="repeat_volume_interval">Volume repeat interval: ${volume_interval}ms ${hasVolumeOverride ? '' : '(auto: same as D-pad)'}</label><br>
+          <input type="range" min="50" max="500" step="25" .value="${volume_interval}" id="repeat_volume_interval" name="volume_interval" @input=${this.repeatConfigChanged} style="width: 40ch;">
           </input>
           <br>
           <br>
@@ -305,7 +318,7 @@ class LgRemoteControlEditor extends LitElement {
             Enable debug logging (console)
           </label>
           <br>
-          <small style="opacity:0.7">Hold D-pad to scroll faster. Short tap = single step. Debug shows fires in browser console (F12).</small>
+          <small style="opacity:0.7">Hold D-pad or Volume (+/-) to repeat faster. Short tap = single step. Debug shows fires in browser console (F12).</small>
           <br>
           <br>
         `;
