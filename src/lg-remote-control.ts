@@ -104,6 +104,19 @@ class LgRemoteControl extends LitElement {
   }
 
   protected shouldUpdate(changed: Map<string, unknown>): boolean {
+    // internal state must always re-render
+    if (
+      changed.has("_show_inputs") ||
+      changed.has("_show_sound_output") ||
+      changed.has("_show_text") ||
+      changed.has("_show_keypad") ||
+      changed.has("_show_vol_text") ||
+      changed.has("volume_value") ||
+      changed.has("soundOutput") ||
+      changed.has("output_entity") ||
+      changed.has("config")
+    )
+      return true;
     if (!changed.has("hass")) return super.shouldUpdate(changed);
     const oldHass: any = changed.get("hass");
     if (!oldHass) return true;
@@ -226,7 +239,7 @@ class LgRemoteControl extends LitElement {
                     </button>
                     <p class="source_text"><b>SOURCE</b></p>
                     <div class="grid-item-input">
-                      ${stateObj.attributes.source_list.map(
+                      ${(stateObj.attributes.source_list ?? []).map(
                         (source) => html`
                           <button
                             class="${stateObj.attributes.source === source ? "btn-input-on" : "btn-input  ripple overlay"}"
@@ -609,7 +622,7 @@ class LgRemoteControl extends LitElement {
         },
       },
     };
-    this.ownerDocument.querySelector("home-assistant").dispatchEvent(popupEvent);
+    this.ownerDocument.querySelector("home-assistant")?.dispatchEvent(popupEvent);
   }
 
   _button(button) {
@@ -666,13 +679,15 @@ class LgRemoteControl extends LitElement {
           (soundOut === "external_arc" || soundOut === "external_optical")
         ) {
           const lvl = ampliState.attributes?.volume_level;
-          this.volume_value =
-            typeof lvl === "number" ? Math.round(lvl * 200) / 2 : this.volume_value;
-          this.output_entity = this.config.ampli_entity;
+          const nextVol = typeof lvl === "number" ? Math.round(lvl * 100) : this.volume_value;
+          if (nextVol !== this.volume_value) this.volume_value = nextVol;
+          if (this.output_entity !== this.config.ampli_entity)
+            this.output_entity = this.config.ampli_entity;
         } else {
           const lvl = stateObj.attributes?.volume_level;
-          this.volume_value = typeof lvl === "number" ? Math.round(lvl * 100) : 0;
-          this.output_entity = this.config.entity;
+          const nextVol = typeof lvl === "number" ? Math.round(lvl * 100) : 0;
+          if (nextVol !== this.volume_value) this.volume_value = nextVol;
+          if (this.output_entity !== this.config.entity) this.output_entity = this.config.entity;
         }
         const newSoundOutput = stateObj.attributes?.sound_output ?? "";
         if (newSoundOutput !== this.soundOutput) this.soundOutput = newSoundOutput;
@@ -1082,7 +1097,7 @@ class LgRemoteControl extends LitElement {
           }
           .tv_title {
             width: fit-content;
-            alig: -webkit-center;
+            text-align: center;
             display: block;
             margin: auto;
             padding: calc(var(--remotewidth)/52) calc(var(--remotewidth)/26);
