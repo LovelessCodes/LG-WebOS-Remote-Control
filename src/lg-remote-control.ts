@@ -4,6 +4,7 @@ import { customElement } from "lit/decorators.js";
 
 import "./editor";
 import { CARD_TAG_NAME, CARD_VERSION, EDITOR_CARD_TAG_NAME } from "./const";
+import { HoldRepeatController } from "./hold-repeat-controller";
 import {
   lineOutIcon,
   amazonIcon,
@@ -52,16 +53,8 @@ class LgRemoteControl extends LitElement {
   private valueDisplayTimeout: ReturnType<typeof setTimeout> | undefined;
   private homeisLongPress: boolean = false;
   private homelongPressTimer: ReturnType<typeof setTimeout> | undefined;
-  private _directionHoldTimer: ReturnType<typeof setTimeout> | undefined = undefined;
-  private _directionRepeatTimer: ReturnType<typeof setInterval> | undefined = undefined;
-  private _directionIsRepeating: boolean = false;
-  private _activeDirection: string | null = null;
-  private _ignoreNextClickUntil: number = 0;
-  private _volumeHoldTimer: ReturnType<typeof setTimeout> | undefined = undefined;
-  private _volumeRepeatTimer: ReturnType<typeof setInterval> | undefined = undefined;
-  private _volumeIsRepeating: boolean = false;
-  private _activeVolumeService: string | null = null;
-  private _ignoreVolumeClickUntil: number = 0;
+  private _directionCtrl!: HoldRepeatController;
+  private _volumeCtrl!: HoldRepeatController;
 
   static getConfigElement() {
     // Create and return an editor element
@@ -134,6 +127,18 @@ class LgRemoteControl extends LitElement {
     this._show_vol_text = false;
     this.volume_value = 0;
     this.soundOutput = "";
+    this._directionCtrl = new HoldRepeatController(
+      () => this._repeatDelay,
+      () => this._repeatInterval,
+      (k) => this._button(k),
+      (...a) => this._debugLog(...a),
+    );
+    this._volumeCtrl = new HoldRepeatController(
+      () => this._volumeDelay,
+      () => this._volumeInterval,
+      (k) => this._updateVolume(k),
+      (...a) => this._debugLog(...a),
+    );
   }
 
   render() {
@@ -790,84 +795,16 @@ class LgRemoteControl extends LitElement {
   }
 
   private _onDirectionPointerDown(direction: string, e: PointerEvent) {
-    this._debugLog(
-      `pointerDown dir=${direction} delay=${this._repeatDelay} interval=${this._repeatInterval} ptrId=${(e as any).pointerId} type=${e.pointerType}`,
-    );
-    // prevent scrolling / context menu
-    try {
-      (e as any).preventDefault();
-    } catch {}
-    const target = e.currentTarget as HTMLElement;
-    try {
-      target.setPointerCapture((e as PointerEvent).pointerId);
-    } catch {}
-    this._activeDirection = direction;
-    this._directionIsRepeating = false;
-    clearTimeout(this._directionHoldTimer);
-    clearInterval(this._directionRepeatTimer);
-    this._directionHoldTimer = setTimeout(() => {
-      this._debugLog(
-        `hold triggered dir=${direction} -> start repeat every ${this._repeatInterval}ms`,
-      );
-      this._directionIsRepeating = true;
-      this._button(direction);
-      let count = 1;
-      this._directionRepeatTimer = setInterval(() => {
-        count++;
-        this._debugLog(`repeat #${count} dir=${direction}`);
-        this._button(direction);
-      }, this._repeatInterval);
-    }, this._repeatDelay);
+    this._directionCtrl.onPointerDown(direction, e);
   }
-
   private _onDirectionPointerUp(e: PointerEvent) {
-    this._debugLog(
-      `pointerUp active=${this._activeDirection} isRepeating=${this._directionIsRepeating} ptrId=${(e as any).pointerId}`,
-    );
-    try {
-      (e as any).preventDefault();
-    } catch {}
-    const target = e.currentTarget as HTMLElement;
-    try {
-      target.releasePointerCapture((e as PointerEvent).pointerId);
-    } catch {}
-    clearTimeout(this._directionHoldTimer);
-    clearInterval(this._directionRepeatTimer);
-    if (this._activeDirection && !this._directionIsRepeating) {
-      this._debugLog(`short tap -> single fire ${this._activeDirection}`);
-      this._button(this._activeDirection);
-    } else if (this._activeDirection && this._directionIsRepeating) {
-      this._debugLog(`hold release -> stop repeat ${this._activeDirection}`);
-    }
-    // suppress synthetic click that follows pointerup
-    this._ignoreNextClickUntil = Date.now() + 600;
-    this._activeDirection = null;
-    this._directionIsRepeating = false;
+    this._directionCtrl.onPointerUp(e);
   }
-
   private _onDirectionPointerCancel(e: PointerEvent) {
-    this._debugLog(
-      `pointerCancel/Leave active=${this._activeDirection} isRepeating=${this._directionIsRepeating}`,
-    );
-    clearTimeout(this._directionHoldTimer);
-    clearInterval(this._directionRepeatTimer);
-    this._activeDirection = null;
-    this._directionIsRepeating = false;
-    this._ignoreNextClickUntil = Date.now() + 600;
+    this._directionCtrl.onPointerCancel(e);
   }
-
   private _onDirectionClick(direction: string, e: Event) {
-    // fallback for keyboard / accessibility; ignore if just handled via pointer
-    if (Date.now() < this._ignoreNextClickUntil) {
-      this._debugLog(`click suppressed dir=${direction} (pointer handled)`);
-      try {
-        e.preventDefault();
-        e.stopPropagation();
-      } catch {}
-      return;
-    }
-    this._debugLog(`click fallback dir=${direction}`);
-    this._button(direction);
+    this._directionCtrl.onClick(direction, e);
   }
 
   private _updateVolume(service: string) {
@@ -889,116 +826,41 @@ class LgRemoteControl extends LitElement {
   }
 
   private _onVolumePointerDown(service: string, e: PointerEvent) {
-    if (isNaN(this.volume_value as any)) {
-      this._debugLog(`volume pointerDown ignored - volume_value NaN service=${service}`);
-      return;
-    }
-    this._debugLog(
-      `volume pointerDown service=${service} delay=${this._volumeDelay} interval=${this._volumeInterval} ptrId=${(e as any).pointerId} type=${e.pointerType}`,
-    );
-    try {
-      (e as any).preventDefault();
-    } catch {}
-    const target = e.currentTarget as HTMLElement;
-    try {
-      target.setPointerCapture((e as PointerEvent).pointerId);
-    } catch {}
-    this._activeVolumeService = service;
-    this._volumeIsRepeating = false;
-    clearTimeout(this._volumeHoldTimer);
-    clearInterval(this._volumeRepeatTimer);
-    // show volume immediately
+    if (!Number.isFinite(this.volume_value)) return;
     this._show_vol_text = true;
     this.requestUpdate();
-    this._volumeHoldTimer = setTimeout(() => {
-      this._debugLog(
-        `volume hold triggered service=${service} -> start repeat every ${this._volumeInterval}ms`,
-      );
-      this._volumeIsRepeating = true;
-      this._updateVolume(service);
-      let count = 1;
-      this._volumeRepeatTimer = setInterval(() => {
-        count++;
-        this._debugLog(`volume repeat #${count} service=${service}`);
-        this._updateVolume(service);
-      }, this._volumeInterval);
-    }, this._volumeDelay);
+    this._volumeCtrl.onPointerDown(service, e);
   }
-
   private _onVolumePointerUp(e: PointerEvent) {
-    this._debugLog(
-      `volume pointerUp active=${this._activeVolumeService} isRepeating=${this._volumeIsRepeating} ptrId=${(e as any).pointerId}`,
-    );
-    try {
-      (e as any).preventDefault();
-    } catch {}
-    const target = e.currentTarget as HTMLElement;
-    try {
-      target.releasePointerCapture((e as PointerEvent).pointerId);
-    } catch {}
-    clearTimeout(this._volumeHoldTimer);
-    clearInterval(this._volumeRepeatTimer);
-    if (this._activeVolumeService && !this._volumeIsRepeating) {
-      this._debugLog(`volume short tap -> single fire ${this._activeVolumeService}`);
-      this._updateVolume(this._activeVolumeService);
-    } else if (this._activeVolumeService && this._volumeIsRepeating) {
-      this._debugLog(`volume hold release -> stop repeat ${this._activeVolumeService}`);
-      // keep _show_vol_text visible a bit longer (handled by _updateVolume timeout)
+    const wasRepeating = this._volumeCtrl.repeating;
+    this._volumeCtrl.onPointerUp(e);
+    if (wasRepeating) {
       clearTimeout(this.valueDisplayTimeout);
       this.valueDisplayTimeout = setTimeout(() => {
         this._show_vol_text = false;
         this.requestUpdate();
       }, 800);
     }
-    this._ignoreVolumeClickUntil = Date.now() + 600;
-    this._activeVolumeService = null;
-    this._volumeIsRepeating = false;
   }
-
   private _onVolumePointerCancel(e: PointerEvent) {
-    this._debugLog(
-      `volume pointerCancel/Leave active=${this._activeVolumeService} isRepeating=${this._volumeIsRepeating}`,
-    );
-    clearTimeout(this._volumeHoldTimer);
-    clearInterval(this._volumeRepeatTimer);
-    this._activeVolumeService = null;
-    this._volumeIsRepeating = false;
-    this._ignoreVolumeClickUntil = Date.now() + 600;
-    // keep vol text a bit then hide
+    this._volumeCtrl.onPointerCancel(e);
     clearTimeout(this.valueDisplayTimeout);
     this.valueDisplayTimeout = setTimeout(() => {
       this._show_vol_text = false;
       this.requestUpdate();
     }, 800);
   }
-
   private _onVolumeClick(service: string, e: Event) {
-    if (Date.now() < this._ignoreVolumeClickUntil) {
-      this._debugLog(`volume click suppressed service=${service} (pointer handled)`);
-      try {
-        e.preventDefault();
-        e.stopPropagation();
-      } catch {}
-      return;
-    }
-    // also ignore if volume_value NaN
-    if (isNaN(this.volume_value as any)) return;
-    this._debugLog(`volume click fallback service=${service}`);
-    this._updateVolume(service);
+    if (!Number.isFinite(this.volume_value)) return;
+    this._volumeCtrl.onClick(service, e);
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    clearTimeout(this._directionHoldTimer);
-    clearInterval(this._directionRepeatTimer);
-    clearTimeout(this._volumeHoldTimer);
-    clearInterval(this._volumeRepeatTimer);
+    this._directionCtrl.destroy();
+    this._volumeCtrl.destroy();
     clearTimeout(this.homelongPressTimer);
     clearTimeout(this.valueDisplayTimeout);
-    this._directionHoldTimer = undefined;
-    this._directionRepeatTimer = undefined;
-    this._volumeHoldTimer = undefined;
-    this._volumeRepeatTimer = undefined;
     this.homelongPressTimer = undefined;
     this.valueDisplayTimeout = undefined;
   }
