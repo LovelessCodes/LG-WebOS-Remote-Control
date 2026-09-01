@@ -170,128 +170,7 @@ class LgRemoteControl extends LitElement {
           style="box-sizing: border-box; --remote-button-color: ${buttonColor}; --remote-text-color: ${textColor}; --remote-color: ${backgroundColor}; --remotewidth: ${remoteWidth};  --main-border-color: ${borderColor}; --main-border-width: ${borderWidth}"
         >
           ${this._renderTitle(tvNameColor)} ${this._renderPower(stateObj, mac, textColor, remoteWidth)}
-          ${this._renderCenter(stateObj, backgroundColor)}
-                        <!-- ################################# SOURCE BUTTONS ################################# -->
-                        ${
-                          this.config.sources
-                            ? html`
-                                <div class="grid-container-source">
-                                  ${this.config.sources.map((source) => {
-                                    return html`
-                                      <button
-                                        class="btn_source ripple"
-                                        @click=${() => this._select_source(source.name)}
-                                      >
-                                        ${LgRemoteControl.getIcon(source.icon)}
-                                      </button>
-                                    `;
-                                  })}
-                                </div>
-                              `
-                            : html` <div class="grid-container-source">
-                                <button
-                                  class="btn_source ripple"
-                                  @click=${() => this._select_source("Netflix")}
-                                >
-                                  <ha-icon style="height: 70%; width: 70%;" icon="mdi:netflix" />
-                                </button>
-                                <button
-                                  class="btn_source ripple"
-                                  @click=${() => this._select_source("Prime Video")}
-                                >
-                                  ${amazonIcon()}
-                                </button>
-                                <button
-                                  class="btn_source ripple"
-                                  @click=${() => this._select_source("Disney+")}
-                                >
-                                  ${disneyIcon()}
-                                </button>
-                                <button
-                                  class="btn_source ripple"
-                                  @click=${() => this._select_source("DAZN")}
-                                >
-                                  ${daznIcon()}
-                                </button>
-                              </div>`
-                        }
-                        <!-- ################################# SOURCE BUTTONS END ################################# -->
-
-                        <!-- ################################# COLORED BUTTONS ################################# -->
-                        ${
-                          this.config.color_buttons
-                            ? html`
-                                <div class="grid-container-color_btn">
-                                  <button
-                                    class="btn-color ripple"
-                                    style="background-color: red; height: calc(var(--remotewidth) / 12);"
-                                    @click=${() => this._button("RED")}
-                                  ></button>
-                                  <button
-                                    class="btn-color ripple"
-                                    style="background-color: green; height: calc(var(--remotewidth) / 12);"
-                                    @click=${() => this._button("GREEN")}
-                                  ></button>
-                                  <button
-                                    class="btn-color ripple"
-                                    style="background-color: yellow; height: calc(var(--remotewidth) / 12);"
-                                    @click=${() => this._button("YELLOW")}
-                                  ></button>
-                                  <button
-                                    class="btn-color ripple"
-                                    style="background-color: blue; height: calc(var(--remotewidth) / 12);"
-                                    @click=${() => this._button("BLUE")}
-                                  ></button>
-                                </div>
-                              `
-                            : html``
-                        }
-                        <!-- ################################# COLORED BUTTONS END ################################# -->
-
-                        <div class="grid-container-volume-channel-control" >
-                            <button class="btn ripple" id="plusButton" style="border-radius: 50% 50% 0px 0px; margin: 0px auto 0px auto; height: 100%; touch-action: none;"
-                                @pointerdown=${(e: PointerEvent) => this._onVolumePointerDown("volume_up", e)}
-                                @pointerup=${(e: PointerEvent) => this._onVolumePointerUp(e)}
-                                @pointercancel=${(e: PointerEvent) => this._onVolumePointerCancel(e)}
-                                @pointerleave=${(e: PointerEvent) => this._onVolumePointerCancel(e)}
-                                @click=${(e: Event) => this._onVolumeClick("volume_up", e)}
-                            ><ha-icon icon="mdi:plus"/></button>
-                            <button class="btn-flat flat-high ripple" id="homeButton" style="margin-top: 0px; height: 50%; touch-action: none;" @pointerdown=${(e: PointerEvent) => this._homePointerDown(e)} @pointerup=${(e: PointerEvent) => this._homePointerUp(e)} @pointercancel=${(e: PointerEvent) => this._homePointerCancel(e)} @pointerleave=${(e: PointerEvent) => this._homePointerCancel(e)}>
-    <ha-icon icon="mdi:home"></ha-icon>
-</button>
-
-
-
-
-
-
-
-
-                            <button class="btn ripple" style="border-radius: 50% 50% 0px 0px; margin: 0px auto 0px auto; height: 100%;" @click=${() => this._button("CHANNELUP")}><ha-icon icon="mdi:chevron-up"/></button>
-                            <button class="btn" style="border-radius: 0px; cursor: default; margin: 0px auto 0px auto; height: 100%;"><ha-icon icon="${stateObj.attributes.is_volume_muted === true ? "mdi:volume-off" : "mdi:volume-high"}"/></button>
-                            <button class="btn ripple" style="color:${stateObj.attributes.is_volume_muted === true ? "red" : ""}; height: 100%;" @click=${() => this._button("MUTE")}><span class="${stateObj.attributes.is_volume_muted === true ? "blink" : ""}"><ha-icon icon="mdi:volume-mute"></span></button>
-                            <button class="btn" style="border-radius: 0px; cursor: default; margin: 0px auto 0px auto; height: 100%;"><ha-icon icon="mdi:volume-medium"/></button>
-                            <button class="btn ripple" id="minusButton" style="border-radius: 0px 0px 50% 50%; margin: 0px auto 0px auto; height: 100%; touch-action: none;"
-                                @pointerdown=${(e: PointerEvent) => this._onVolumePointerDown("volume_down", e)}
-                                @pointerup=${(e: PointerEvent) => this._onVolumePointerUp(e)}
-                                @pointercancel=${(e: PointerEvent) => this._onVolumePointerCancel(e)}
-                                @pointerleave=${(e: PointerEvent) => this._onVolumePointerCancel(e)}
-                                @click=${(e: Event) => this._onVolumeClick("volume_down", e)}
-                            ><ha-icon icon="mdi:minus"/></button>
-                            <button class="btn-flat flat-high ripple" style="margin-bottom: 0px; height: 50%;" @click=${() => this._button("INFO")}><ha-icon icon="mdi:information-variant"/></button>
-                            <button class="btn ripple" style="border-radius: 0px 0px 50% 50%;  margin: 0px auto 0px auto; height: 100%;"  @click=${() => this._button("CHANNELDOWN")}><ha-icon icon="mdi:chevron-down"/></button>
-                        </div>
-
-                        <!-- ################################# MEDIA CONTROL ################################# -->
-                        <div class="grid-container-media-control" >
-                            <button class="btn-flat flat-low ripple"  @click=${() => this._command("PLAY", "media.controls/play")}><ha-icon icon="mdi:play"/></button>
-                            <button class="btn-flat flat-low ripple"  @click=${() => this._command("PAUSE", "media.controls/pause")}><ha-icon icon="mdi:pause"/></button>
-                            <button class="btn-flat flat-low ripple"  @click=${() => this._command("STOP", "media.controls/stop")}><ha-icon icon="mdi:stop"/></button>
-                            <button class="btn-flat flat-low ripple"  @click=${() => this._command("REWIND", "media.controls/rewind")}><ha-icon icon="mdi:skip-backward"/></button>
-                            <button class="btn-flat flat-low ripple" style="color: red;" @click=${() => this._command("RECORD", "media.controls/Record")}><ha-icon icon="mdi:record"/></button>
-                            <button class="btn-flat flat-low ripple"  @click=${() => this._command("FAST_FORWARD", "media.controls/fastForward")}><ha-icon icon="mdi:skip-forward"/></button>
-                        </div>
-                        <!-- ################################# MEDIA CONTROL END ################################# -->
+          ${this._renderCenter(stateObj, backgroundColor)} ${this._renderSources()} ${this._renderColorButtons()} ${this._renderVolumeChannel(stateObj)} ${this._renderMediaControls()}
                         </div>
         </div>
       </div>
@@ -313,6 +192,104 @@ class LgRemoteControl extends LitElement {
       mac: this.config?.mac,
     };
   }
+  private _renderSources() {
+    if (this.config.sources?.length) {
+      return html`<div class="grid-container-source">
+        ${this.config.sources.map(
+          (source: any) =>
+            html`<button class="btn_source ripple" @click=${() => this._select_source(source.name)}>
+              ${LgRemoteControl.getIcon(source.icon)}
+            </button>`,
+        )}
+      </div>`;
+    }
+    return html`<div class="grid-container-source">
+      <button class="btn_source ripple" @click=${() => this._select_source("Netflix")}>
+        <ha-icon style="height: 70%; width: 70%;" icon="mdi:netflix" />
+      </button>
+      <button class="btn_source ripple" @click=${() => this._select_source("Prime Video")}>
+        ${amazonIcon()}
+      </button>
+      <button class="btn_source ripple" @click=${() => this._select_source("Disney+")}>
+        ${disneyIcon()}
+      </button>
+      <button class="btn_source ripple" @click=${() => this._select_source("DAZN")}>
+        ${daznIcon()}
+      </button>
+    </div>`;
+  }
+
+  private _renderColorButtons() {
+    if (!this.config.color_buttons) return html``;
+    return html`<div class="grid-container-color_btn">
+      ${(["red", "green", "yellow", "blue"] as const).map(
+        (c) =>
+          html`<button
+            class="btn-color ripple"
+            style="background-color: ${c}; height: calc(var(--remotewidth) / 12);"
+            @click=${() => this._button(c.toUpperCase())}
+          ></button>`,
+      )}
+    </div>`;
+  }
+
+  private _renderVolumeChannel(stateObj: any) {
+    const muted = stateObj.attributes.is_volume_muted === true;
+    return html`<div class="grid-container-volume-channel-control">
+      <button class="btn ripple" id="plusButton" style="border-radius: 50% 50% 0px 0px; margin: 0px auto 0px auto; height: 100%; touch-action: none;" @pointerdown=${(e: PointerEvent) => this._onVolumePointerDown("volume_up", e)} @pointerup=${(e: PointerEvent) => this._onVolumePointerUp(e)} @pointercancel=${(e: PointerEvent) => this._onVolumePointerCancel(e)} @pointerleave=${(e: PointerEvent) => this._onVolumePointerCancel(e)} @click=${(e: Event) => this._onVolumeClick("volume_up", e)}><ha-icon icon="mdi:plus" /></button>
+      <button class="btn-flat flat-high ripple" id="homeButton" style="margin-top: 0px; height: 50%; touch-action: none;" @pointerdown=${(e: PointerEvent) => this._homePointerDown(e)} @pointerup=${(e: PointerEvent) => this._homePointerUp(e)} @pointercancel=${(e: PointerEvent) => this._homePointerCancel(e)} @pointerleave=${(e: PointerEvent) => this._homePointerCancel(e)}><ha-icon icon="mdi:home"></ha-icon></button>
+      <button class="btn ripple" style="border-radius: 50% 50% 0px 0px; margin: 0px auto 0px auto; height: 100%;" @click=${() => this._button("CHANNELUP")}><ha-icon icon="mdi:chevron-up" /></button>
+      <button class="btn" style="border-radius: 0px; cursor: default; margin: 0px auto 0px auto; height: 100%;"><ha-icon icon="${muted ? "mdi:volume-off" : "mdi:volume-high"}" /></button>
+      <button class="btn ripple" style="color:${muted ? "red" : ""}; height: 100%;" @click=${() => this._button("MUTE")}><span class="${muted ? "blink" : ""}"><ha-icon icon="mdi:volume-mute"></span></button>
+      <button class="btn" style="border-radius: 0px; cursor: default; margin: 0px auto 0px auto; height: 100%;"><ha-icon icon="mdi:volume-medium" /></button>
+      <button class="btn ripple" id="minusButton" style="border-radius: 0px 0px 50% 50%; margin: 0px auto 0px auto; height: 100%; touch-action: none;" @pointerdown=${(e: PointerEvent) => this._onVolumePointerDown("volume_down", e)} @pointerup=${(e: PointerEvent) => this._onVolumePointerUp(e)} @pointercancel=${(e: PointerEvent) => this._onVolumePointerCancel(e)} @pointerleave=${(e: PointerEvent) => this._onVolumePointerCancel(e)} @click=${(e: Event) => this._onVolumeClick("volume_down", e)}><ha-icon icon="mdi:minus" /></button>
+      <button class="btn-flat flat-high ripple" style="margin-bottom: 0px; height: 50%;" @click=${() => this._button("INFO")}><ha-icon icon="mdi:information-variant" /></button>
+      <button class="btn ripple" style="border-radius: 0px 0px 50% 50%;  margin: 0px auto 0px auto; height: 100%;" @click=${() => this._button("CHANNELDOWN")}><ha-icon icon="mdi:chevron-down" /></button>
+    </div>`;
+  }
+
+  private _renderMediaControls() {
+    return html`<div class="grid-container-media-control">
+      <button
+        class="btn-flat flat-low ripple"
+        @click=${() => this._command("PLAY", "media.controls/play")}
+      >
+        <ha-icon icon="mdi:play" />
+      </button>
+      <button
+        class="btn-flat flat-low ripple"
+        @click=${() => this._command("PAUSE", "media.controls/pause")}
+      >
+        <ha-icon icon="mdi:pause" />
+      </button>
+      <button
+        class="btn-flat flat-low ripple"
+        @click=${() => this._command("STOP", "media.controls/stop")}
+      >
+        <ha-icon icon="mdi:stop" />
+      </button>
+      <button
+        class="btn-flat flat-low ripple"
+        @click=${() => this._command("REWIND", "media.controls/rewind")}
+      >
+        <ha-icon icon="mdi:skip-backward" />
+      </button>
+      <button
+        class="btn-flat flat-low ripple"
+        style="color: red;"
+        @click=${() => this._command("RECORD", "media.controls/Record")}
+      >
+        <ha-icon icon="mdi:record" />
+      </button>
+      <button
+        class="btn-flat flat-low ripple"
+        @click=${() => this._command("FAST_FORWARD", "media.controls/fastForward")}
+      >
+        <ha-icon icon="mdi:skip-forward" />
+      </button>
+    </div>`;
+  }
+
   private _renderTitle(color: string) {
     return this.config?.name
       ? html`<div class="tv_title" style="color:${color}">${this.config.name}</div>`
@@ -394,43 +371,73 @@ class LgRemoteControl extends LitElement {
   }
   private _renderSound(stateObj: any) {
     const so = stateObj.attributes.sound_output;
-    const btn = (val: string, cls: string, label: string, icon?: any) =>
-      html`<button
-        type="button"
-        class="${so === val ? "btn_sound_on " + cls : "btn_sound_off " + cls + " ripple overlay"}"
-        @click=${() => this._select_sound_output(val)}
-      >
-        ${icon ?? label}
-      </button>`;
-    // keep original dual layout (text vs icon) - delegate to existing template for brevity
+    const items: Array<{ val: string; cls: string; label: string; icon?: unknown }> = [
+      {
+        val: "tv_speaker",
+        cls: "tv",
+        label: "TV Speaker",
+        icon: html`<ha-icon class="icon_source" icon="mdi:television-classic"></ha-icon>`,
+      },
+      { val: "tv_external_speaker", cls: "tv-opt", label: "TV + Optic", icon: tvOpticIcon() },
+      {
+        val: "tv_speaker_headphone",
+        cls: "tv-phone",
+        label: "TV + H-Phone",
+        icon: tvHeadphonesIcon(),
+      },
+      { val: "external_optical", cls: "opt", label: "Optical", icon: opticIcon() },
+      { val: "external_arc", cls: "hdmi", label: "HDMI", icon: arcIcon() },
+      { val: "lineout", cls: "line", label: "Lineout", icon: lineOutIcon() },
+      {
+        val: "headphone",
+        cls: "phone",
+        label: "HeadPhone",
+        icon: html`<ha-icon icon="mdi:headphones"></ha-icon>`,
+      },
+      {
+        val: "bt_soundbar",
+        cls: "bluetooth",
+        label: "Bluetooth",
+        icon: html`<ha-icon icon="mdi:bluetooth"></ha-icon>`,
+      },
+    ];
+    const shape = html`<div class="shape-sound">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 260">
+        <path
+          d="m 13 43 a 30 30 0 0 0 60 0 a 30 30 0 0 0 -60 0 M 130 12 h 88 a 30 30 0 0 1 30 30 v 188 a 30 30 0 0 1 -30 30 h -176 a 30 30 0 0 1 -30 -30 v -117 a 30 30 0 0 1 30 -30 a 40 40 0 0 0 41 -41 a 30 30 0 0 1 30 -30 z "
+          fill="var(--remote-button-color)"
+          stroke="#000000"
+          stroke-width="0"
+        />
+      </svg>
+    </div>`;
+    const back = html`<button
+      type="button"
+      class="bnt-sound-back ripple"
+      @click=${() => (this._show_sound_output = false)}
+    >
+      <ha-icon icon="mdi:undo-variant" />
+    </button>`;
     if (this._show_text) {
       return html`<div class="grid-container-sound">
-        <div class="shape-sound">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 260">
-            <path
-              d="m 13 43 a 30 30 0 0 0 60 0 a 30 30 0 0 0 -60 0 M 130 12 h 88 a 30 30 0 0 1 30 30 v 188 a 30 30 0 0 1 -30 30 h -176 a 30 30 0 0 1 -30 -30 v -117 a 30 30 0 0 1 30 -30 a 40 40 0 0 0 41 -41 a 30 30 0 0 1 30 -30 z "
-              fill="var(--remote-button-color)"
-              stroke="#000000"
-              stroke-width="0"
-            />
-          </svg>
-        </div>
-        <button
-          type="button"
-          class="bnt-sound-back ripple"
-          @click=${() => (this._show_sound_output = false)}
-        >
-          <ha-icon icon="mdi:undo-variant" /></button
-        ><button
+        ${shape}${back}<button
           type="button"
           class="btn_soundoutput ripple"
           @click=${() => (this._show_text = false)}
         >
           SOUND</button
-        >${btn("tv_speaker", "tv bnt_sound_text_width", "TV Speaker")}${btn("tv_external_speaker", "tv-opt bnt_sound_text_width", "TV + Optic")}${btn("tv_speaker_headphone", "tv-phone bnt_sound_text_width", "TV + H-Phone")}${btn("external_optical", "opt bnt_sound_text_width", "Optical")}${btn("external_arc", "hdmi bnt_sound_text_width", "HDMI")}${btn("lineout", "line bnt_sound_text_width", "Lineout")}${btn("headphone", "phone bnt_sound_text_width", "HeadPhone")}${btn("bt_soundbar", "bluetooth bnt_sound_text_width", "Bluetooth")}
+        >${items.map((i) => html`<button type="button" class="${so === i.val ? "btn_sound_on " + i.cls + " bnt_sound_text_width" : "btn_sound_off " + i.cls + " bnt_sound_text_width ripple overlay"}" @click=${() => this._select_sound_output(i.val)}>${i.label}</button>`)}
       </div>`;
     }
-    return html`<div class="grid-container-sound"><div class="shape-sound"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 260 260"><path d="m 13 43 a 30 30 0 0 0 60 0 a 30 30 0 0 0 -60 0 M 130 12 h 88 a 30 30 0 0 1 30 30 v 188 a 30 30 0 0 1 -30 30 h -176 a 30 30 0 0 1 -30 -30 v -117 a 30 30 0 0 1 30 -30 a 40 40 0 0 0 41 -41 a 30 30 0 0 1 30 -30 z " fill="var(--remote-button-color)" stroke="#000000" stroke-width="0"/></svg></div><button type="button" class="bnt-sound-back ripple" @click=${() => (this._show_sound_output = false)}><ha-icon icon="mdi:undo-variant" /></button><button type="button" class="sound_icon_text ripple" @click=${() => (this._show_text = true)}><ha-icon icon="mdi:speaker"></button><button type="button" class="${so === "tv_speaker" ? "btn_sound_on tv bnt_sound_icon_width" : "btn_sound_off tv bnt_sound_icon_width ripple overlay"}" @click=${() => this._select_sound_output("tv_speaker")}><ha-icon class="icon_source" icon="mdi:television-classic"></button><button type="button" class="${so === "tv_external_speaker" ? "btn_sound_on tv-opt bnt_sound_icon_width" : "btn_sound_off tv-opt bnt_sound_icon_width ripple overlay"}" @click=${() => this._select_sound_output("tv_external_speaker")}>${tvOpticIcon()}</button><button type="button" class="${so === "tv_speaker_headphone" ? "btn_sound_on tv-phone bnt_sound_icon_width" : "btn_sound_off tv-phone bnt_sound_icon_width ripple overlay"}" @click=${() => this._select_sound_output("tv_speaker_headphone")}>${tvHeadphonesIcon()}</button><button type="button" class="${so === "external_optical" ? "btn_sound_on opt bnt_sound_icon_width" : "btn_sound_off opt bnt_sound_icon_width ripple overlay"}" @click=${() => this._select_sound_output("external_optical")}>${opticIcon()}</button><button type="button" class="${so === "external_arc" ? "btn_sound_on hdmi bnt_sound_icon_width" : "btn_sound_off hdmi bnt_sound_icon_width ripple overlay"}" @click=${() => this._select_sound_output("external_arc")}>${arcIcon()}</button><button type="button" class="${so === "lineout" ? "btn_sound_on line bnt_sound_icon_width" : "btn_sound_off line bnt_sound_icon_width ripple overlay"}" @click=${() => this._select_sound_output("lineout")}>${lineOutIcon()}</button><button type="button" class="${so === "headphone" ? "btn_sound_on phone bnt_sound_icon_width" : "btn_sound_off phone bnt_sound_icon_width ripple overlay"}" @click=${() => this._select_sound_output("headphone")}><ha-icon class="icon_source" icon="mdi:headphones"></button><button type="button" class="${so === "bt_soundbar" ? "btn_sound_on bluetooth bnt_sound_icon_width" : "btn_sound_off bluetooth bnt_sound_icon_width ripple overlay"}" @click=${() => this._select_sound_output("bt_soundbar")}><ha-icon class="icon_source" icon="mdi:bluetooth"></button></div>`;
+    return html`<div class="grid-container-sound">
+      ${shape}${back}<button
+        type="button"
+        class="sound_icon_text ripple"
+        @click=${() => (this._show_text = true)}
+      >
+        <ha-icon icon="mdi:speaker"></ha-icon></button
+      >${items.map((i) => html`<button type="button" class="${so === i.val ? "btn_sound_on " + i.cls + " bnt_sound_icon_width" : "btn_sound_off " + i.cls + " bnt_sound_icon_width ripple overlay"}" @click=${() => this._select_sound_output(i.val)}>${i.icon ?? i.label}</button>`)}
+    </div>`;
   }
   private _renderKeypad() {
     return html`<div class="grid-container-keypad">
