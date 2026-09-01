@@ -23,21 +23,24 @@ import { getMediaPlayerEntitiesByPlatform } from "./utils";
 const line1 = "  LG WebOS Remote Control Card  ";
 const line2 = `  version: ${CARD_VERSION}  `;
 /* eslint no-console: 0 */
-console.info(
-  `%c${line1}\n%c${line2}`,
-  "color: orange; font-weight: bold; background: black",
-  "color: white; font-weight: bold; background: dimgray",
-);
-
-// Allow this card to appear in the card chooser menu
+if (!(window as any).__LG_REMOTE_LOGGED__) {
+  console.info(
+    `%c${line1}\n%c${line2}`,
+    "color: orange; font-weight: bold; background: black",
+    "color: white; font-weight: bold; background: dimgray",
+  );
+  (window as any).__LG_REMOTE_LOGGED__ = true;
+}
 const windowWithCards = window as unknown as WindowWithCards;
 windowWithCards.customCards = windowWithCards.customCards || [];
-windowWithCards.customCards.push({
-  type: CARD_TAG_NAME,
-  name: "LG WebOS Remote Control Card",
-  preview: true,
-  description: "Remote control card for LG WebOS TV devices",
-});
+if (!windowWithCards.customCards.some((c: any) => c?.type === CARD_TAG_NAME)) {
+  windowWithCards.customCards.push({
+    type: CARD_TAG_NAME,
+    name: "LG WebOS Remote Control Card",
+    preview: true,
+    description: "Remote control card for LG WebOS TV devices",
+  });
+}
 
 @customElement(CARD_TAG_NAME)
 class LgRemoteControl extends LitElement {
@@ -52,8 +55,8 @@ class LgRemoteControl extends LitElement {
   private soundOutput: string;
   private output_entity: string;
   private valueDisplayTimeout: ReturnType<typeof setTimeout> | undefined;
-  private homeisLongPress: boolean = false;
-  private homelongPressTimer: ReturnType<typeof setTimeout> | undefined;
+  private homeIsLongPress: boolean = false;
+  private homeLongPressTimer: ReturnType<typeof setTimeout> | undefined;
   private _directionCtrl!: HoldRepeatController;
   private _volumeCtrl!: HoldRepeatController;
 
@@ -74,26 +77,25 @@ class LgRemoteControl extends LitElement {
     };
   }
 
-  static get iconMapping() {
-    return {
-      disney: disneyIcon(),
-      dazn: daznIcon(),
-      nowtv: nowTvIcon(),
-      amazon: amazonIcon(),
-    };
-  }
+  static readonly iconMapping = {
+    disney: disneyIcon(),
+    dazn: daznIcon(),
+    nowtv: nowTvIcon(),
+    amazon: amazonIcon(),
+  } as const;
 
   static get properties() {
     return {
       hass: {},
       config: {},
-      _show_inputs: {},
-      _show_sound_output: {},
-      _show_text: {},
-      _show_keypad: {},
-      _show_vol_text: {},
-      volume_value: { type: Number, reflect: true },
-      output_entity: { type: String, reflect: true },
+      _show_inputs: { state: true },
+      _show_sound_output: { state: true },
+      _show_text: { state: true },
+      _show_keypad: { state: true },
+      _show_vol_text: { state: true },
+      volume_value: { state: true },
+      soundOutput: { state: true },
+      output_entity: { state: true },
     };
   }
 
@@ -191,7 +193,7 @@ class LgRemoteControl extends LitElement {
                                   class="btn_source ripple"
                                   @click=${() => this._select_source("Netflix")}
                                 >
-                                  <ha-icon style="heigth: 70%; width: 70%;" icon="mdi:netflix" />
+                                  <ha-icon style="height: 70%; width: 70%;" icon="mdi:netflix" />
                                 </button>
                                 <button
                                   class="btn_source ripple"
@@ -267,7 +269,7 @@ class LgRemoteControl extends LitElement {
 
                             <button class="btn ripple" style="border-radius: 50% 50% 0px 0px; margin: 0px auto 0px auto; height: 100%;" @click=${() => this._button("CHANNELUP")}><ha-icon icon="mdi:chevron-up"/></button>
                             <button class="btn" style="border-radius: 0px; cursor: default; margin: 0px auto 0px auto; height: 100%;"><ha-icon icon="${stateObj.attributes.is_volume_muted === true ? "mdi:volume-off" : "mdi:volume-high"}"/></button>
-                            <button class="btn ripple" Style="color:${stateObj.attributes.is_volume_muted === true ? "red" : ""}; height: 100%;" @click=${() => this._button("MUTE")}><span class="${stateObj.attributes.is_volume_muted === true ? "blink" : ""}"><ha-icon icon="mdi:volume-mute"></span></button>
+                            <button class="btn ripple" style="color:${stateObj.attributes.is_volume_muted === true ? "red" : ""}; height: 100%;" @click=${() => this._button("MUTE")}><span class="${stateObj.attributes.is_volume_muted === true ? "blink" : ""}"><ha-icon icon="mdi:volume-mute"></span></button>
                             <button class="btn" style="border-radius: 0px; cursor: default; margin: 0px auto 0px auto; height: 100%;"><ha-icon icon="mdi:parking"/></button>
                             <button class="btn ripple" id="minusButton" style="border-radius: 0px 0px 50% 50%; margin: 0px auto 0px auto; height: 100%; touch-action: none;"
                                 @pointerdown=${(e: PointerEvent) => this._onVolumePointerDown("volume_down", e)}
@@ -287,7 +289,7 @@ class LgRemoteControl extends LitElement {
                             <button class="btn-flat flat-low ripple"  @click=${() => this._command("STOP", "media.controls/stop")}><ha-icon icon="mdi:stop"/></button>
                             <button class="btn-flat flat-low ripple"  @click=${() => this._command("REWIND", "media.controls/rewind")}><ha-icon icon="mdi:skip-backward"/></button>
                             <button class="btn-flat flat-low ripple" style="color: red;" @click=${() => this._command("RECORD", "media.controls/Record")}><ha-icon icon="mdi:record"/></button>
-                            <button class="btn-flat flat-low ripple"  @click=${() => this._command("FAST_FOWARD", "media.controls/fastForward")}><ha-icon icon="mdi:skip-forward"/></button>
+                            <button class="btn-flat flat-low ripple"  @click=${() => this._command("FAST_FORWARD", "media.controls/fastForward")}><ha-icon icon="mdi:skip-forward"/></button>
                         </div>
                         <!-- ################################# MEDIA CONTROL END ################################# -->
                         </div>
@@ -304,7 +306,7 @@ class LgRemoteControl extends LitElement {
       tvNameColor: this.config?.tv_name_color ?? "var(--primary-text-color)",
       backgroundColor:
         this.config?.colors?.background ??
-        "var( --ha-card-background, var(--card-background-color, white) )",
+        "var(--ha-card-background, var(--card-background-color, white) )",
       borderColor: this.config?.colors?.border ?? "var(--primary-text-color)",
       buttonColor: this.config?.colors?.buttons ?? "var(--secondary-background-color)",
       textColor: this.config?.colors?.text ?? "var(--primary-text-color)",
@@ -548,7 +550,10 @@ class LgRemoteControl extends LitElement {
         },
       },
     };
-    this.ownerDocument.querySelector("home-assistant")?.dispatchEvent(popupEvent);
+    const ha =
+      (this.getRootNode() as any)?.host ?? this.ownerDocument.querySelector("home-assistant");
+    if (ha) ha.dispatchEvent(popupEvent);
+    else this.dispatchEvent(popupEvent);
   }
 
   _button(button) {
@@ -628,10 +633,10 @@ class LgRemoteControl extends LitElement {
     try {
       (e.currentTarget as HTMLElement).setPointerCapture((e as PointerEvent).pointerId);
     } catch {}
-    this.homeisLongPress = false;
-    clearTimeout(this.homelongPressTimer);
-    this.homelongPressTimer = setTimeout(() => {
-      this.homeisLongPress = true;
+    this.homeIsLongPress = false;
+    clearTimeout(this.homeLongPressTimer);
+    this.homeLongPressTimer = setTimeout(() => {
+      this.homeIsLongPress = true;
       this._button("MENU");
     }, 1000);
   }
@@ -642,12 +647,12 @@ class LgRemoteControl extends LitElement {
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture((e as PointerEvent).pointerId);
     } catch {}
-    clearTimeout(this.homelongPressTimer);
-    if (!this.homeisLongPress) this._button("HOME");
+    clearTimeout(this.homeLongPressTimer);
+    if (!this.homeIsLongPress) this._button("HOME");
   }
   private _homePointerCancel(e: PointerEvent) {
-    clearTimeout(this.homelongPressTimer);
-    this.homeisLongPress = false;
+    clearTimeout(this.homeLongPressTimer);
+    this.homeIsLongPress = false;
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture((e as PointerEvent).pointerId);
     } catch {}
@@ -727,7 +732,7 @@ class LgRemoteControl extends LitElement {
   }
 
   private _updateVolume(service: string) {
-    if (isNaN(this.volume_value as any)) {
+    if (!Number.isFinite(this.volume_value)) {
       this._debugLog(`volume skip - volume_value NaN`);
       return;
     }
@@ -778,21 +783,21 @@ class LgRemoteControl extends LitElement {
     super.disconnectedCallback();
     this._directionCtrl.destroy();
     this._volumeCtrl.destroy();
-    clearTimeout(this.homelongPressTimer);
+    clearTimeout(this.homeLongPressTimer);
     clearTimeout(this.valueDisplayTimeout);
-    this.homelongPressTimer = undefined;
+    this.homeLongPressTimer = undefined;
     this.valueDisplayTimeout = undefined;
   }
 
   _select_source(source) {
-    this.hass.callService("media_player", "select_source", {
+    this.callServiceFromConfig(`SOURCE_${source}`, "media_player.select_source", {
       entity_id: this.config.entity,
       source: source,
     });
   }
 
   _select_sound_output(sound_output) {
-    this.hass.callService("webostv", "select_sound_output", {
+    this.callServiceFromConfig(`SOUND_${sound_output}`, "webostv.select_sound_output", {
       entity_id: this.config.entity,
       sound_output: sound_output,
     });
@@ -808,10 +813,10 @@ class LgRemoteControl extends LitElement {
     }
     this.config = {
       ...config,
-      dimensions: { ...config.dimensions },
-      colors: { ...config.colors },
-      repeat: { ...config.repeat },
-      keys: { ...config.keys },
+      ...(config.dimensions ? { dimensions: { ...config.dimensions } } : {}),
+      ...(config.colors ? { colors: { ...config.colors } } : {}),
+      ...(config.repeat ? { repeat: { ...config.repeat } } : {}),
+      ...(config.keys ? { keys: { ...config.keys } } : {}),
     };
     if (this.config?.debug || this.config?.repeat?.debug) {
       console.log(
@@ -822,13 +827,13 @@ class LgRemoteControl extends LitElement {
   }
 
   getCardSize() {
-    return 15;
+    return 4;
   }
 
   callServiceFromConfig(key: string, service: string, serviceData: Record<string, any>) {
     let serviceToUse = service;
     let serviceDataToUse = serviceData;
-    if (this.config.keys && key in this.config.keys) {
+    if (this.config.keys && Object.prototype.hasOwnProperty.call(this.config.keys, key)) {
       const keyConfig = this.config.keys[key];
       if (typeof keyConfig?.service === "string" && keyConfig.service.includes(".")) {
         serviceToUse = keyConfig["service"];
