@@ -1,4 +1,5 @@
 {
   "name": "LG WebOS Remote Control",
+  "content_in_root": false,
   "render_readme": true
 }
