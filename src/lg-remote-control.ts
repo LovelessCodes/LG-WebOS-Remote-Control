@@ -1,9 +1,10 @@
 import { HomeAssistant } from "custom-card-helpers";
+import type { HassEntity } from "home-assistant-js-websocket";
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
 
-import { CARD_TAG_NAME, CARD_VERSION, EDITOR_CARD_TAG_NAME } from "./const";
 import "./editor";
+import { CARD_TAG_NAME, CARD_VERSION, EDITOR_CARD_TAG_NAME } from "./const";
 import { HoldRepeatController } from "./hold-repeat-controller";
 import {
   lineOutIcon,
@@ -19,6 +20,31 @@ import {
 import { remoteStyles } from "./lg-remote-control.styles";
 import { HomeAssistantFixed, WindowWithCards } from "./types";
 import { getMediaPlayerEntitiesByPlatform } from "./utils";
+
+interface LgRemoteConfig {
+  entity: string;
+  ampli_entity?: string;
+  mac?: string;
+  name?: string;
+  tv_name_color?: string;
+  dimensions?: { scale?: number; border_width?: string };
+  colors?: { background?: string; border?: string; buttons?: string; text?: string };
+  repeat?: {
+    delay?: number;
+    interval?: number;
+    volume_delay?: number;
+    volume_interval?: number;
+    debug?: boolean;
+    home_long_press?: number;
+  };
+  hold_delay?: number;
+  hold_interval?: number;
+  debug?: boolean;
+  keys?: Record<string, { service: string; data?: Record<string, unknown> }>;
+  sources?: Array<{ name: string; icon: string }>;
+  channels?: unknown;
+  color_buttons?: boolean;
+}
 
 const line1 = "  LG WebOS Remote Control Card  ";
 const line2 = `  version: ${CARD_VERSION}  `;
@@ -45,7 +71,7 @@ if (!windowWithCards.customCards.some((c: any) => c?.type === CARD_TAG_NAME)) {
 @customElement(CARD_TAG_NAME)
 class LgRemoteControl extends LitElement {
   public hass!: HomeAssistant;
-  public config!: any;
+  public config!: LgRemoteConfig;
   private _show_inputs: boolean;
   private _show_sound_output: boolean;
   private _show_text: boolean;
@@ -602,35 +628,41 @@ class LgRemoteControl extends LitElement {
     );
   }
 
+  private _syncVolumeState() {
+    const stateObj = this.hass?.states?.[this.config?.entity] as HassEntity | undefined;
+    if (!stateObj) return;
+    const ampliState = this.config.ampli_entity
+      ? (this.hass.states[this.config.ampli_entity] as HassEntity | undefined)
+      : undefined;
+    const soundOut = (stateObj.attributes as any)?.sound_output;
+    if (
+      this.config.ampli_entity &&
+      ampliState &&
+      (soundOut === "external_arc" || soundOut === "external_optical")
+    ) {
+      const lvl = (ampliState.attributes as any)?.volume_level;
+      const nextVol = typeof lvl === "number" ? Math.round(lvl * 100) : this.volume_value;
+      if (nextVol !== this.volume_value) this.volume_value = nextVol;
+      if (this.output_entity !== this.config.ampli_entity)
+        this.output_entity = this.config.ampli_entity;
+    } else {
+      const lvl = (stateObj.attributes as any)?.volume_level;
+      const nextVol = typeof lvl === "number" ? Math.round(lvl * 100) : 0;
+      if (nextVol !== this.volume_value) this.volume_value = nextVol;
+      if (this.output_entity !== this.config.entity) this.output_entity = this.config.entity;
+    }
+    const newSoundOutput = (stateObj.attributes as any)?.sound_output ?? "";
+    if (newSoundOutput !== this.soundOutput) this.soundOutput = newSoundOutput;
+  }
+
   protected willUpdate(changedProps: Map<string, unknown>) {
     super.willUpdate(changedProps);
-    if (changedProps.has("hass") || changedProps.has("config")) {
-      const stateObj = this.hass?.states?.[this.config?.entity];
-      if (stateObj) {
-        const ampliState = this.config.ampli_entity
-          ? this.hass.states[this.config.ampli_entity]
-          : undefined;
-        const soundOut = stateObj.attributes?.sound_output;
-        if (
-          this.config.ampli_entity &&
-          ampliState &&
-          (soundOut === "external_arc" || soundOut === "external_optical")
-        ) {
-          const lvl = ampliState.attributes?.volume_level;
-          const nextVol = typeof lvl === "number" ? Math.round(lvl * 100) : this.volume_value;
-          if (nextVol !== this.volume_value) this.volume_value = nextVol;
-          if (this.output_entity !== this.config.ampli_entity)
-            this.output_entity = this.config.ampli_entity;
-        } else {
-          const lvl = stateObj.attributes?.volume_level;
-          const nextVol = typeof lvl === "number" ? Math.round(lvl * 100) : 0;
-          if (nextVol !== this.volume_value) this.volume_value = nextVol;
-          if (this.output_entity !== this.config.entity) this.output_entity = this.config.entity;
-        }
-        const newSoundOutput = stateObj.attributes?.sound_output ?? "";
-        if (newSoundOutput !== this.soundOutput) this.soundOutput = newSoundOutput;
-      }
-    }
+    if (changedProps.has("hass") || changedProps.has("config")) this._syncVolumeState();
+  }
+
+  protected updated(changedProps: Map<string, unknown>) {
+    super.updated(changedProps);
+    // willUpdate mutations are synchronous; updated is safe place for side-effects if needed
   }
 
   private _homePointerDown(e: PointerEvent) {
@@ -642,10 +674,15 @@ class LgRemoteControl extends LitElement {
     } catch {}
     this.homeIsLongPress = false;
     clearTimeout(this.homeLongPressTimer);
+    const delay = (() => {
+      const v = (this.config as LgRemoteConfig)?.repeat?.home_long_press ?? 1000;
+      const n = Number(v);
+      return isNaN(n) ? 1000 : Math.max(300, Math.min(3000, n));
+    })();
     this.homeLongPressTimer = setTimeout(() => {
       this.homeIsLongPress = true;
       this._button("MENU");
-    }, 1000);
+    }, delay);
   }
   private _homePointerUp(e: PointerEvent) {
     try {
@@ -786,10 +823,31 @@ class LgRemoteControl extends LitElement {
     this._volumeCtrl.onClick(service, e);
   }
 
+  connectedCallback() {
+    super.connectedCallback();
+    // re-create controllers if they were destroyed on disconnect
+    if (!this._directionCtrl) {
+      this._directionCtrl = new HoldRepeatController(
+        () => this._repeatDelay,
+        () => this._repeatInterval,
+        (k) => this._button(k),
+        (...a) => this._debugLog(...a),
+      );
+    }
+    if (!this._volumeCtrl) {
+      this._volumeCtrl = new HoldRepeatController(
+        () => this._volumeDelay,
+        () => this._volumeInterval,
+        (k) => this._updateVolume(k),
+        (...a) => this._debugLog(...a),
+      );
+    }
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback();
-    this._directionCtrl.destroy();
-    this._volumeCtrl.destroy();
+    this._directionCtrl?.destroy();
+    this._volumeCtrl?.destroy();
     clearTimeout(this.homeLongPressTimer);
     clearTimeout(this.valueDisplayTimeout);
     this.homeLongPressTimer = undefined;
