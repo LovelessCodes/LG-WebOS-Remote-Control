@@ -44,16 +44,16 @@ class LgRemoteControl extends LitElement {
     private volume_value: number;
     private soundOutput: string;
     private output_entity: string;
-    private valueDisplayTimeout: NodeJS.Timeout;
+    private valueDisplayTimeout: ReturnType<typeof setTimeout> | undefined;
     private homeisLongPress: boolean = false;
-    private homelongPressTimer: any; // Tipo generico, ma puoi specificare il tipo corretto se lo conosci
-    private _directionHoldTimer: any = null;
-    private _directionRepeatTimer: any = null;
+    private homelongPressTimer: ReturnType<typeof setTimeout> | undefined;
+    private _directionHoldTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+    private _directionRepeatTimer: ReturnType<typeof setInterval> | undefined = undefined;
     private _directionIsRepeating: boolean = false;
     private _activeDirection: string | null = null;
     private _ignoreNextClickUntil: number = 0;
-    private _volumeHoldTimer: any = null;
-    private _volumeRepeatTimer: any = null;
+    private _volumeHoldTimer: ReturnType<typeof setTimeout> | undefined = undefined;
+    private _volumeRepeatTimer: ReturnType<typeof setInterval> | undefined = undefined;
     private _volumeIsRepeating: boolean = false;
     private _activeVolumeService: string | null = null;
     private _ignoreVolumeClickUntil: number = 0;
@@ -66,7 +66,7 @@ class LgRemoteControl extends LitElement {
 
     public static getStubConfig(hass: HomeAssistantFixed) {
         let entities = getMediaPlayerEntitiesByPlatform(hass, "webostv");
-        if(entities.length == 0){
+        if(entities.length === 0){
             entities = Object.keys(hass.entities).filter(e => e.startsWith("media_player."));
         }
         const entity = entities.length > 0 ? entities[0] : "media_player.lg_webos_smart_tv";
@@ -95,9 +95,18 @@ class LgRemoteControl extends LitElement {
             _show_keypad: {},
             _show_vol_text: {},
             volume_value: { type: Number, reflect: true },
-            output_entity: { type: Number, reflect: true },
-            
+            output_entity: { type: String, reflect: true },
+
         };
+    }
+
+    protected shouldUpdate(changed: Map<string, unknown>): boolean {
+        if (!changed.has("hass")) return super.shouldUpdate(changed);
+        const oldHass: any = changed.get("hass");
+        if (!oldHass) return true;
+        const keys = [this.config?.entity, this.config?.ampli_entity].filter(Boolean);
+        for (const k of keys) if (oldHass.states?.[k] !== this.hass.states?.[k]) return true;
+        return false;
     }
 
     constructor() {
@@ -113,7 +122,11 @@ class LgRemoteControl extends LitElement {
     }
 
     render() {
+        if (!this.hass || !this.config?.entity) return html``;
         const stateObj = this.hass.states[this.config.entity];
+        if (!stateObj) {
+            return html`<ha-card style="padding:16px;color:var(--error-color)">Entity not found: ${this.config.entity}</ha-card>`;
+        }
         const colorButtons = this.config.color_buttons;
 
         const borderWidth = this.config.dimensions && this.config.dimensions.border_width ? this.config.dimensions.border_width : "1px";
@@ -126,18 +139,7 @@ class LgRemoteControl extends LitElement {
         const textColor = this.config.colors && this.config.colors.text ? this.config.colors.text : "var(--primary-text-color)";
         const mac = this.config.mac;
 
-        if (this.config.ampli_entity &&
-            (this.hass.states[this.config.entity].attributes.sound_output === 'external_arc' ||
-                this.hass.states[this.config.entity].attributes.sound_output === 'external_optical')) {
-
-            this.volume_value = Math.round(this.hass.states[this.config.ampli_entity].attributes.volume_level * 100 * 2) / 2;
-            this.output_entity = this.config.ampli_entity;
-
-        } else {
-
-            this.volume_value = Math.round(this.hass.states[this.config.entity].attributes.volume_level * 100);
-            this.output_entity = this.config.entity;
-        }
+        void stateObj; // volume/output derived in willUpdate
 
         return html`
             <div class="card">
@@ -306,13 +308,13 @@ class LgRemoteControl extends LitElement {
                                 @pointerleave=${(e: PointerEvent) => this._onVolumePointerCancel(e)}
                                 @click=${(e: Event) => this._onVolumeClick("volume_up", e)}
                             ><ha-icon icon="mdi:plus"/></button>
-                            <button class="btn-flat flat-high ripple" id="homeButton" style="margin-top: 0px; height: 50%;" @mousedown=${(e) => this._homeButtonDown(e)} @touchstart=${(e) => this._homeButtonDown(e)} @mouseup=${(e) => this._homeButtonUp(e)} @touchend=${(e) => this._homeButtonUp(e)}>
+                            <button class="btn-flat flat-high ripple" id="homeButton" style="margin-top: 0px; height: 50%; touch-action: none;" @pointerdown=${(e: PointerEvent) => this._homePointerDown(e)} @pointerup=${(e: PointerEvent) => this._homePointerUp(e)} @pointercancel=${(e: PointerEvent) => this._homePointerCancel(e)} @pointerleave=${(e: PointerEvent) => this._homePointerCancel(e)}>
     <ha-icon icon="mdi:home"></ha-icon>
 </button>
-                                                    
 
 
-                            
+
+
 
 
 
@@ -406,33 +408,51 @@ class LgRemoteControl extends LitElement {
         this._debugLog(`firstUpdated volume hold: delay=${this._volumeDelay} interval=${this._volumeInterval}`);
     }
 
-    updated(changedProperties) {
-
-        if (changedProperties.has("hass")) {
-            const tvEntity = this.hass.states[this.config.entity];
-            const newSoundOutput = tvEntity.attributes.sound_output;
-
-            if (newSoundOutput !== this.soundOutput) {
-                this.soundOutput = newSoundOutput; // Aggiorna il valore della variabile di classe
-                this.requestUpdate(); // Richiedi l'aggiornamento della card
+    protected willUpdate(changedProps: Map<string, unknown>) {
+        super.willUpdate(changedProps);
+        if (changedProps.has("hass") || changedProps.has("config")) {
+            const stateObj = this.hass?.states?.[this.config?.entity];
+            if (stateObj) {
+                const ampliState = this.config.ampli_entity ? this.hass.states[this.config.ampli_entity] : undefined;
+                const soundOut = stateObj.attributes?.sound_output;
+                if (this.config.ampli_entity && ampliState && (soundOut === 'external_arc' || soundOut === 'external_optical')) {
+                    const lvl = ampliState.attributes?.volume_level;
+                    this.volume_value = typeof lvl === "number" ? Math.round(lvl * 200) / 2 : this.volume_value;
+                    this.output_entity = this.config.ampli_entity;
+                } else {
+                    const lvl = stateObj.attributes?.volume_level;
+                    this.volume_value = typeof lvl === "number" ? Math.round(lvl * 100) : 0;
+                    this.output_entity = this.config.entity;
+                }
+                const newSoundOutput = stateObj.attributes?.sound_output ?? "";
+                if (newSoundOutput !== this.soundOutput) this.soundOutput = newSoundOutput;
             }
         }
     }
 
-    _homeButtonDown(event: MouseEvent | TouchEvent) {
-      this.homeisLongPress = false;
-      this.homelongPressTimer = setTimeout(() => {
-          this.homeisLongPress = true;
-          this._button("MENU")
-      }, 1000); // Tempo in millisecondi per determinare una pressione prolungata
-  }
-  
-   _homeButtonUp(event: MouseEvent | TouchEvent) {
-       clearTimeout(this.homelongPressTimer);
-       if (!this.homeisLongPress) {
-           this._button("HOME")
-       }
-   }
+    updated() {
+    }
+
+    private _homePointerDown(e: PointerEvent) {
+        try { (e as any).preventDefault(); } catch {}
+        try { (e.currentTarget as HTMLElement).setPointerCapture((e as PointerEvent).pointerId); } catch {}
+        this.homeisLongPress = false;
+        clearTimeout(this.homelongPressTimer);
+        this.homelongPressTimer = setTimeout(() => { this.homeisLongPress = true; this._button("MENU"); }, 1000);
+    }
+    private _homePointerUp(e: PointerEvent) {
+        try { (e as any).preventDefault(); } catch {}
+        try { (e.currentTarget as HTMLElement).releasePointerCapture((e as PointerEvent).pointerId); } catch {}
+        clearTimeout(this.homelongPressTimer);
+        if (!this.homeisLongPress) this._button("HOME");
+    }
+    private _homePointerCancel(e: PointerEvent) {
+        clearTimeout(this.homelongPressTimer);
+        this.homeisLongPress = false;
+        try { (e.currentTarget as HTMLElement).releasePointerCapture((e as PointerEvent).pointerId); } catch {}
+    }
+    _homeButtonDown(event: MouseEvent | TouchEvent) { this._homePointerDown(event as unknown as PointerEvent); }
+    _homeButtonUp(event: MouseEvent | TouchEvent) { this._homePointerUp(event as unknown as PointerEvent); }
 
     private get _repeatDelay(): number {
         const v = this.config?.repeat?.delay ?? this.config?.hold_delay ?? 400;
@@ -641,6 +661,13 @@ class LgRemoteControl extends LitElement {
         clearTimeout(this._volumeHoldTimer);
         clearInterval(this._volumeRepeatTimer);
         clearTimeout(this.homelongPressTimer);
+        clearTimeout(this.valueDisplayTimeout);
+        this._directionHoldTimer = undefined;
+        this._directionRepeatTimer = undefined;
+        this._volumeHoldTimer = undefined;
+        this._volumeRepeatTimer = undefined;
+        this.homelongPressTimer = undefined;
+        this.valueDisplayTimeout = undefined;
     }
 
 
@@ -660,12 +687,21 @@ class LgRemoteControl extends LitElement {
     }
 
     setConfig(config) {
-        if (!config.entity) {
-            throw new Error("Invalid configuration");
+        if (!config?.entity || typeof config.entity !== "string") {
+            throw new Error("Invalid configuration: missing entity");
         }
-        this.config = config;
-        if (config?.debug || config?.repeat?.debug) {
-            console.log(`[lg-remote:${config.entity}] debug enabled`, config.repeat ?? config);
+        if (!config.entity.startsWith("media_player.")) {
+            console.warn(`[lg-remote:${config.entity}] entity does not look like a media_player`);
+        }
+        this.config = {
+            ...config,
+            dimensions: { ...(config.dimensions ?? {}) },
+            colors: { ...(config.colors ?? {}) },
+            repeat: { ...(config.repeat ?? {}) },
+            keys: { ...(config.keys ?? {}) },
+        };
+        if (this.config?.debug || this.config?.repeat?.debug) {
+            console.log(`[lg-remote:${this.config.entity}] debug enabled`, this.config.repeat ?? this.config);
         }
     }
 
@@ -678,17 +714,28 @@ class LgRemoteControl extends LitElement {
         let serviceDataToUse = serviceData;
         if(this.config.keys && key in this.config.keys) {
             const keyConfig = this.config.keys[key];
-            serviceToUse = keyConfig["service"];
-            serviceDataToUse = keyConfig["data"];
+            if (typeof keyConfig?.service === "string" && keyConfig.service.includes(".")) {
+                serviceToUse = keyConfig["service"];
+                serviceDataToUse = keyConfig["data"] ?? serviceData;
+            } else {
+                console.warn(`[lg-remote:${this.config?.entity}] invalid keys[${key}].service:`, keyConfig?.service);
+            }
         }
         if (this._debugEnabled) {
             console.log(`[lg-remote:${this.config?.entity}] callService key=${key} service=${serviceToUse}`, serviceDataToUse);
         }
-        this.hass.callService(
-          serviceToUse.split(".")[0],
-          serviceToUse.split(".")[1],
-          serviceDataToUse
-        );
+        const dot = serviceToUse.indexOf(".");
+        if (dot === -1) {
+            console.warn(`[lg-remote:${this.config?.entity}] invalid service string:`, serviceToUse);
+            return;
+        }
+        const domain = serviceToUse.slice(0, dot);
+        const svc = serviceToUse.slice(dot + 1);
+        if (!domain || !svc) {
+            console.warn(`[lg-remote:${this.config?.entity}] invalid service domain/service:`, serviceToUse);
+            return;
+        }
+        this.hass.callService(domain, svc, serviceDataToUse);
 
     }
 
