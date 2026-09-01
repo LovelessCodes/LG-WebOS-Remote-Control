@@ -69,7 +69,7 @@ if (!windowWithCards.customCards.some((c: any) => c?.type === CARD_TAG_NAME)) {
 }
 
 @customElement(CARD_TAG_NAME)
-class LgRemoteControl extends LitElement {
+export class LgRemoteControl extends LitElement {
   public hass!: HomeAssistant;
   public config!: LgRemoteConfig;
   private _show_inputs: boolean;

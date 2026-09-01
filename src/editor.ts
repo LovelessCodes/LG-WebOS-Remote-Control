@@ -42,7 +42,7 @@ const avreceivers = {
 const AvReceiverdevicemap = new Map(Object.entries(avreceivers));
 
 @customElement(EDITOR_CARD_TAG_NAME)
-class LgRemoteControlEditor extends LitElement {
+export class LgRemoteControlEditor extends LitElement {
   private _config: any;
   private hass: HomeAssistantFixed;
 
@@ -103,7 +103,7 @@ class LgRemoteControlEditor extends LitElement {
 
           // Aggiorna la configurazione
           const _config = Object.assign({}, this._config);
-          _config["colors"] = { ...(_config["colors"] ?? {}) };
+          _config["colors"] = { ..._config["colors"] };
           _config["colors"][inputName] = "";
           this._config = _config;
 
@@ -119,7 +119,7 @@ class LgRemoteControlEditor extends LitElement {
     } else {
       // Se l'evento non proviene da un'icona, gestisci la modifica dell'input come al solito
       const _config = Object.assign({}, this._config);
-      _config["colors"] = { ...(_config["colors"] ?? {}) };
+      _config["colors"] = { ..._config["colors"] };
       _config["colors"][ev.target.name.toString()] = ev.target.value;
       this._config = _config;
 
@@ -140,7 +140,7 @@ class LgRemoteControlEditor extends LitElement {
   dimensionsConfigChanged(ev) {
     // Se l'evento non proviene da un'icona, gestisci la modifica dell'input come al solito
     const _config = Object.assign({}, this._config);
-    _config["dimensions"] = { ...(_config["dimensions"] ?? {}) };
+    _config["dimensions"] = { ..._config["dimensions"] };
 
     if (ev.target.name === "border_width") {
       _config["dimensions"][ev.target.name] = ev.target.value + "px";
@@ -158,9 +158,9 @@ class LgRemoteControlEditor extends LitElement {
     });
     this.dispatchEvent(event);
   }
-  getLgTvEntityDropdown(optionValue) {
-    let mediaPlayerEntities = getMediaPlayerEntitiesByPlatform(this.hass, "webostv");
-    let heading = "LG Media Player Entity";
+  getLgTvEntityDropdown(optionValue: string) {
+    const mediaPlayerEntities = getMediaPlayerEntitiesByPlatform(this.hass, "webostv");
+    const heading = "LG Media Player Entity";
     let blankEntity = html``;
     if (this._config.tventity == "" || !mediaPlayerEntities.includes(optionValue)) {
       blankEntity = html`<option value="" selected>- - - -</option> `;
@@ -253,8 +253,8 @@ class LgRemoteControlEditor extends LitElement {
         `;
   }
 
-  colorButtonsConfig(optionvalue) {
-    let heading = "Do you want to configure an AV-Receiver";
+  colorButtonsConfig(_optionvalue: string) {
+    const _heading = "Do you want to configure an AV-Receiver";
 
     // Controlla se esiste una configurazione "color_buttons" e usa quel valore come opzione selezionata
     const selectedValue = this._config.color_buttons || "false";
@@ -340,7 +340,7 @@ class LgRemoteControlEditor extends LitElement {
 
   repeatConfigChanged(ev) {
     const _config = Object.assign({}, this._config);
-    _config["repeat"] = { ...(_config["repeat"] ?? {}) };
+    _config["repeat"] = { ..._config["repeat"] };
     const val = parseInt(ev.target.value, 10);
     _config["repeat"][ev.target.name] = isNaN(val) ? ev.target.value : val;
     this._config = _config;
@@ -354,7 +354,7 @@ class LgRemoteControlEditor extends LitElement {
 
   repeatDebugChanged(ev) {
     const _config = Object.assign({}, this._config);
-    _config["repeat"] = { ...(_config["repeat"] ?? {}) };
+    _config["repeat"] = { ..._config["repeat"] };
     _config["repeat"]["debug"] = ev.target.checked;
     // also set top-level for backward compat
     _config["debug"] = ev.target.checked;
