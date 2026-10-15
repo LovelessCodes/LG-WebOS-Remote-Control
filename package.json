@@ -21,6 +21,7 @@
     "rolldown": "rolldown -c rolldown.config.ts",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
+    "typecheck": "tsc",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "prepare": "husky"
