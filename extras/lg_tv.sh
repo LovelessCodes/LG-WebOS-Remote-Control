@@ -11,6 +11,7 @@
 #
 # Usage:
 #   LG_TV_HOST=<ip> ./lg_tv.sh backlight  <0-100>       # OLED Light / Backlight
+#   LG_TV_HOST=<ip> ./lg_tv.sh backlight-get            # its value as JSON, for HA
 #   LG_TV_HOST=<ip> ./lg_tv.sh brightness <0-100>       # black level, not luminance
 #   LG_TV_HOST=<ip> ./lg_tv.sh sleeptimer <off|1-1440>  # whole minutes, off cancels
 #   LG_TV_HOST=<ip> ./lg_tv.sh sleepremain              # remaining sleep timer, JSON
@@ -71,12 +72,18 @@ case "${1:-}" in
     URI="com.webos.service.tvReservationAgent/timer/sleep/getRemainTime"
     PAYLOAD='{}'
     ;;
+  backlight-get)
+    # The TV's own value, as JSON: a Home Assistant command_line sensor reads
+    # it back with a value_template of {{ value_json.settings.backlight }}.
+    URI="com.webos.service.settings/getSystemSettings"
+    PAYLOAD='{"category":"picture","keys":["backlight"]}'
+    ;;
   poweroff)
     URI="com.webos.service.tvpower/power/powerOff"
     PAYLOAD='{"reason":"remoteKey"}'
     ;;
   *)
-    echo "usage: $0 {backlight|brightness} <0-100> | sleeptimer <off|minutes> | sleepremain | poweroff" >&2
+    echo "usage: $0 {backlight|brightness} <0-100> | backlight-get | sleeptimer <off|minutes> | sleepremain | poweroff" >&2
     exit 2
     ;;
 esac
