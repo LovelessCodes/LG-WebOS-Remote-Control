@@ -178,11 +178,11 @@ settings:
 | `settings.backlight.data`      | object |         | service data. `$value` is the slider position, 0-100                                       |
 | `settings.backlight.default`   | number | 100     | value the slider starts at                                                                 |
 | `settings.backlight.entity`    | string |         | entity holding the TV's current value, e.g. a `command_line` sensor. The slider mirrors it |
-| `settings.sleep_timer`         | object |         | sleep timer buttons. omitted, no buttons are shown                                         |
+| `settings.sleep_timer`         | object |         | sleep timer slider. omitted, no slider is shown                                            |
 | `settings.sleep_timer.service` | string |         | service to call, e.g. `shell_command.lg_tv_sleeptimer`                                     |
 | `settings.sleep_timer.data`    | object |         | service data. `$value` is the chosen option                                                |
-| `settings.sleep_timer.options` | list   | all     | which buttons to show. default `off, 10, 20, 30, 60, 90, 120, 180, 240`                    |
-| `settings.sleep_timer.default` | string |         | which button starts selected                                                               |
+| `settings.sleep_timer.options` | list   | all     | which options the slider snaps to. default `off, 10, 20, 30, 60, 90, 120, 180, 240`        |
+| `settings.sleep_timer.default` | string |         | which option starts selected                                                               |
 
 Both blocks are independent, and neither is required.
 

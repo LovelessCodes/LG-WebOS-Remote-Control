@@ -130,45 +130,62 @@ export const remoteStyles = css`
     width: calc(var(--remotewidth)/1.03);
     margin: calc(var(--remotewidth)/30) auto 0 auto;
   }
-  .row-settings {
-    display: flex;
-    align-items: center;
-    gap: calc(var(--remotewidth)/40);
+  /*
+   * The sliders, as Bubble Card draws them: a pill with an accent fill that
+   * slides in from the left, and the icon and value riding on top of it.
+   * --slider-fill-at is the fill's position, 0-100. The fill is held at 70%
+   * so what sits on it stays readable, over the fill and over the empty track
+   * alike, in either theme.
+   */
+  .slider {
+    position: relative;
+    overflow: hidden;
+    height: calc(var(--remotewidth)/9);
     margin: calc(var(--remotewidth)/40) 0;
-  }
-  .row-settings-wrap {
-    flex-wrap: wrap;
-  }
-  .row-settings ha-icon {
-    flex: 0 0 auto;
-    color: var(--remote-text-color);
-  }
-  .slider-settings {
-    flex: 1 1 auto;
-    min-width: 0;
-    height: calc(var(--remotewidth)/24);
-    accent-color: var(--primary-color);
-    cursor: pointer;
-  }
-  .settings-value {
-    flex: 0 0 auto;
-    min-width: calc(var(--remotewidth)/9);
-    text-align: right;
-    font-size: calc(var(--remotewidth)/22);
-    color: var(--remote-text-color);
-  }
-  .btn-settings {
+    border-radius: 999px;
     background-color: var(--remote-button-color);
-    color: var(--remote-text-color);
-    border: solid 2px var(--remote-color);
-    border-radius: calc(var(--remotewidth)/20);
-    padding: calc(var(--remotewidth)/70) calc(var(--remotewidth)/28);
-    font-size: calc(var(--remotewidth)/25);
-    cursor: pointer;
+    cursor: ew-resize;
   }
-  .btn-settings-on {
+  .slider-fill {
+    position: absolute;
+    inset: 0;
     background-color: var(--primary-color);
-    color: #fff;
+    opacity: 0.7;
+    transform: translateX(calc(var(--slider-fill-at, 0) * 1% - 100%));
+    transition: transform 0.5s ease-in-out;
+  }
+  /* the fill follows the pointer, it does not glide after it */
+  .slider.is-dragging .slider-fill {
+    transition: none;
+  }
+  .slider-icon,
+  .slider-value {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--remote-text-color);
+    pointer-events: none;
+  }
+  .slider-icon {
+    left: calc(var(--remotewidth)/20);
+    width: calc(var(--remotewidth)/14);
+    height: calc(var(--remotewidth)/14);
+  }
+  .slider-value {
+    right: calc(var(--remotewidth)/18);
+    font-size: calc(var(--remotewidth)/22);
+  }
+  /* the real control: invisible over the pill, so the whole track drags */
+  .slider-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    appearance: none;
+    -webkit-appearance: none;
+    opacity: 0;
+    cursor: ew-resize;
   }
   .grid-container-media-control,
   .grid-container-volume-channel-control {

@@ -115,6 +115,7 @@ export class LgRemoteControl extends LitElement {
   declare private backlight_value?: number;
   private backlight_held_until?: number;
   declare private sleep_timer_value?: string;
+  declare private _settings_dragging: string;
   private valueDisplayTimeout: ReturnType<typeof setTimeout> | undefined;
   private homeIsLongPress: boolean = false;
   private homeLongPressTimer: ReturnType<typeof setTimeout> | undefined;
@@ -159,6 +160,7 @@ export class LgRemoteControl extends LitElement {
       output_entity: { state: true },
       backlight_value: { state: true },
       sleep_timer_value: { state: true },
+      _settings_dragging: { state: true },
     };
   }
 
@@ -175,6 +177,7 @@ export class LgRemoteControl extends LitElement {
       changed.has("output_entity") ||
       changed.has("backlight_value") ||
       changed.has("sleep_timer_value") ||
+      changed.has("_settings_dragging") ||
       changed.has("config")
     )
       return true;
@@ -199,6 +202,7 @@ export class LgRemoteControl extends LitElement {
     this._show_vol_text = false;
     this.volume_value = 0;
     this.soundOutput = "";
+    this._settings_dragging = "";
     this._directionCtrl = new HoldRepeatController(
       () => this._repeatDelay,
       () => this._repeatInterval,
@@ -322,27 +326,65 @@ export class LgRemoteControl extends LitElement {
     return typeof call?.service === "string" && call.service.includes(".");
   }
 
+  /*
+   * One slider, shaped like the ones Bubble Card draws: a pill whose accent
+   * fill slides in from the left, with the icon and the value riding on top of
+   * it. The input is the real control, invisible over the pill, so the whole
+   * track drags while the browser keeps it keyboard reachable.
+   */
+  private _renderSlider(
+    key: string,
+    icon: string,
+    label: string,
+    percent: number,
+    max: number,
+    value: number,
+    onDrag: (value: number) => void,
+    onCommit: () => void,
+  ) {
+    return html`<div
+      class="slider ${this._settings_dragging === key ? "is-dragging" : ""}"
+      style="--slider-fill-at: ${Math.max(0, Math.min(100, percent))}"
+    >
+      <div class="slider-fill"></div>
+      <ha-icon class="slider-icon" icon="${icon}"></ha-icon>
+      <span class="slider-value">${label}</span>
+      <input
+        class="slider-input"
+        type="range"
+        min="0"
+        max="${max}"
+        step="1"
+        .value=${String(value)}
+        @input=${(e: Event) => {
+          this._settings_dragging = key;
+          onDrag(Number((e.target as HTMLInputElement).value));
+        }}
+        @change=${() => {
+          this._settings_dragging = "";
+          onCommit();
+        }}
+      />
+    </div>`;
+  }
+
   private _renderBacklight() {
     const cfg = this.config?.settings?.backlight;
     if (!this._isSettingsCall(cfg)) return html``;
     const current = this._backlightShown(cfg);
-    return html`<div class="row-settings">
-      <ha-icon icon="mdi:brightness-6"></ha-icon>
-      <input
-        class="slider-settings"
-        type="range"
-        min="0"
-        max="100"
-        step="1"
-        .value=${String(current)}
-        @input=${(e: Event) => {
-          this.backlight_value = Number((e.target as HTMLInputElement).value);
-          this.backlight_held_until = Date.now() + BACKLIGHT_HOLD_MS;
-        }}
-        @change=${() => this._callSettingsService("BACKLIGHT", cfg, this.backlight_value)}
-      />
-      <span class="settings-value">${current}</span>
-    </div>`;
+    return this._renderSlider(
+      "backlight",
+      "mdi:brightness-6",
+      String(current),
+      current,
+      100,
+      current,
+      (value) => {
+        this.backlight_value = value;
+        this.backlight_held_until = Date.now() + BACKLIGHT_HOLD_MS;
+      },
+      () => this._callSettingsService("BACKLIGHT", cfg, this.backlight_value),
+    );
   }
 
   /*
@@ -362,26 +404,40 @@ export class LgRemoteControl extends LitElement {
     return clamp(Number.isFinite(local) ? local : 100);
   }
 
+  /*
+   * The timer slider snaps to the configured options, one detent each, so the
+   * fill reads as "how far into the list" rather than as minutes: `off` sits
+   * at the empty end and the longest option fills the pill.
+   */
   private _renderSleepTimer() {
     const cfg = this.config?.settings?.sleep_timer;
     if (!this._isSettingsCall(cfg)) return html``;
     const options = cfg.options?.length ? cfg.options : SLEEP_TIMER_OPTIONS;
+    const index = this._sleepTimerIndex(cfg, options);
+    const steps = Math.max(1, options.length - 1);
+    return this._renderSlider(
+      "sleep_timer",
+      "mdi:timer-outline",
+      this._sleepTimerLabel(options[index]),
+      (index / steps) * 100,
+      options.length - 1,
+      index,
+      (value) => {
+        this.sleep_timer_value = String(options[value]);
+      },
+      () =>
+        this._callSettingsService("SLEEP_TIMER", cfg, options[this._sleepTimerIndex(cfg, options)]),
+    );
+  }
+
+  private _sleepTimerIndex(cfg: SettingsValueCall, options: Array<string | number>): number {
     const selected = this.sleep_timer_value ?? `${cfg.default ?? ""}`;
-    return html`<div class="row-settings row-settings-wrap">
-      <ha-icon icon="mdi:timer-outline"></ha-icon>
-      ${options.map(
-        (option) => html`<button
-          type="button"
-          class="btn-settings ${String(option) === selected ? "btn-settings-on" : ""}"
-          @click=${() => {
-            this.sleep_timer_value = String(option);
-            this._callSettingsService("SLEEP_TIMER", cfg, option);
-          }}
-        >
-          ${option === "off" ? "Off" : option}
-        </button>`,
-      )}
-    </div>`;
+    const index = options.findIndex((option) => String(option) === selected);
+    return index === -1 ? 0 : index;
+  }
+
+  private _sleepTimerLabel(option: string | number): string {
+    return option === "off" ? "Off" : String(option);
   }
 
   private _callSettingsService(key: string, cfg: SettingsValueCall, value: unknown) {
