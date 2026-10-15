@@ -125,6 +125,51 @@ export const remoteStyles = css`
   .grid-container-color_btn {
     height: calc(var(--remotewidth)/10);
   }
+  .grid-container-settings {
+    display: block;
+    width: calc(var(--remotewidth)/1.03);
+    margin: calc(var(--remotewidth)/30) auto 0 auto;
+  }
+  .row-settings {
+    display: flex;
+    align-items: center;
+    gap: calc(var(--remotewidth)/40);
+    margin: calc(var(--remotewidth)/40) 0;
+  }
+  .row-settings-wrap {
+    flex-wrap: wrap;
+  }
+  .row-settings ha-icon {
+    flex: 0 0 auto;
+    color: var(--remote-text-color);
+  }
+  .slider-settings {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: calc(var(--remotewidth)/24);
+    accent-color: var(--primary-color);
+    cursor: pointer;
+  }
+  .settings-value {
+    flex: 0 0 auto;
+    min-width: calc(var(--remotewidth)/9);
+    text-align: right;
+    font-size: calc(var(--remotewidth)/22);
+    color: var(--remote-text-color);
+  }
+  .btn-settings {
+    background-color: var(--remote-button-color);
+    color: var(--remote-text-color);
+    border: solid 2px var(--remote-color);
+    border-radius: calc(var(--remotewidth)/20);
+    padding: calc(var(--remotewidth)/70) calc(var(--remotewidth)/28);
+    font-size: calc(var(--remotewidth)/25);
+    cursor: pointer;
+  }
+  .btn-settings-on {
+    background-color: var(--primary-color);
+    color: #fff;
+  }
   .grid-container-media-control,
   .grid-container-volume-channel-control {
     display: grid;

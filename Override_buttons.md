@@ -61,3 +61,12 @@ available keys:
 - `"POWER"`
 - `"VOLUME_UP"`
 - `"VOLUME_DOWN"`
+
+## Virtual keys
+
+These are not physical buttons. They are the controls added by the `settings:` block
+(backlight slider and sleep timer), and they can be remapped the same way. The data
+described there is what gets passed to the service, and `$value` is already substituted.
+
+- `"BACKLIGHT"`
+- `"SLEEP_TIMER"`

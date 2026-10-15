@@ -66,6 +66,7 @@ resources:
 | `channels`      |        | **Option**   |                            | list of channel in popup                                                                                    |
 | `sources`       |        | **Option**   |                            | list of custom app. if not set, default apps will be displayed                                              |
 | `color_buttons` |        | **Option**   | enable                     | display color buttons: RED GREEN YELLOW BLUE                                                                |
+| `settings`      | object | **Option**   |                            | adds backlight and sleep timer controls (see "Backlight & sleep timer")                                     |
 
 ### Source Options
 
@@ -115,6 +116,92 @@ channels:
 with version 2.0 the possibility of overriding the functionality of the button is introduced. you therefore have the possibility of calling a Home assistant service at your convenience
 
 here are the [override keys](https://github.com/madmicio/LG-WebOS-Remote-Control/blob/master/Override_buttons.md) and the yaml configuration.
+
+## Backlight & sleep timer
+
+Two optional controls, shown under the sources row when configured: a slider for the TV's
+OLED Light / Backlight, and a row of sleep timer buttons.
+
+The card cannot reach these TV APIs by itself. They are internal webOS services that refuse
+Home Assistant's webOS connection (`Denied method call`, `Access denied`), so a privileged
+caller on the TV has to run them. `extras/lg_tv.sh` is a small script that does this over
+SSH on a **rooted** TV, and the card simply calls it as an ordinary Home Assistant service.
+Any service that does the same job works just as well.
+
+### 1. TV
+
+Rooted TV with SSH enabled (Homebrew Channel or rootmy.tv), and a key for Home Assistant in
+`/home/root/.ssh/authorized_keys`. Copy:
+
+- `extras/lg_tv.sh` to `/config/scripts/lg_tv.sh` (`chmod +x`)
+- the private key to `/config/ssh/lg_tv_key` (`chmod 600`)
+
+Test it from a terminal, with the TV on:
+
+```bash
+LG_TV_HOST=192.168.1.107 LG_TV_KEY=/config/ssh/lg_tv_key /config/scripts/lg_tv.sh backlight 40
+```
+
+### 2. Home Assistant
+
+```yaml
+# configuration.yaml
+shell_command:
+  lg_tv_backlight: "/config/scripts/lg_tv.sh backlight {{ level }}"
+  lg_tv_sleeptimer: "/config/scripts/lg_tv.sh sleeptimer {{ minutes }}"
+```
+
+Reload with Developer tools → YAML → _Reload shell_command_ (or restart Home Assistant).
+
+### 3. Card
+
+```yaml
+type: custom:lg-remote-control
+entity: media_player.lg_webos_tv
+settings:
+  backlight:
+    service: shell_command.lg_tv_backlight
+    data:
+      level: "$value"
+    default: 100
+  sleep_timer:
+    service: shell_command.lg_tv_sleeptimer
+    data:
+      minutes: "$value"
+    options: [off, 10, 20, 30, 60, 120]
+```
+
+| Name                           | Type   | Default | Description                                                             |
+| ------------------------------ | ------ | ------- | ----------------------------------------------------------------------- |
+| `settings.backlight`           | object |         | backlight slider. omitted, no slider is shown                           |
+| `settings.backlight.service`   | string |         | service to call, e.g. `shell_command.lg_tv_backlight`                   |
+| `settings.backlight.data`      | object |         | service data. `$value` is the slider position, 0-100                    |
+| `settings.backlight.default`   | number | 100     | value the slider starts at                                              |
+| `settings.sleep_timer`         | object |         | sleep timer buttons. omitted, no buttons are shown                      |
+| `settings.sleep_timer.service` | string |         | service to call, e.g. `shell_command.lg_tv_sleeptimer`                  |
+| `settings.sleep_timer.data`    | object |         | service data. `$value` is the chosen option                             |
+| `settings.sleep_timer.options` | list   | all     | which buttons to show. default `off, 10, 20, 30, 60, 90, 120, 180, 240` |
+| `settings.sleep_timer.default` | string |         | which button starts selected                                            |
+
+Both blocks are independent, and neither is required.
+
+### $value
+
+`$value` is replaced in every string under `data`, including nested objects and lists. On its
+own it keeps the value's type, so `{"sleepTimeMinute": "$value"}` sends a number; inside a
+longer string it is interpolated as text, e.g. `"level=$value"`.
+
+### Notes
+
+- **Backlight is stored per picture mode and input.** Dimming one mode leaves the others
+  alone: an HDR or Dolby Vision mode keeps its own value, which comes back when it is used.
+- **Sleep timer** takes whole minutes (`off` or `0` cancels a running countdown). Writing the
+  TV's `sleepTimer` setting does not control a live countdown; `extras/lg_tv.sh` talks to
+  `tv-reservation-agent`, the daemon that owns it.
+- The commands need the TV to be on. In deep standby SSH is gone and the call fails; check
+  the Home Assistant log.
+- `BACKLIGHT` and `SLEEP_TIMER` can be remapped through the `keys:` option like any other key
+  (see [override keys](Override_buttons.md)).
 
 ## AV receiver volume control Options
 
