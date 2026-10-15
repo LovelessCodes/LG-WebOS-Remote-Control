@@ -19,7 +19,19 @@ import {
 } from "./icons";
 import { remoteStyles } from "./lg-remote-control.styles";
 import { HomeAssistantFixed, WindowWithCards } from "./types";
-import { getMediaPlayerEntitiesByPlatform } from "./utils";
+import { getMediaPlayerEntitiesByPlatform, substituteValue } from "./utils";
+
+interface SettingsValueCall {
+  service: string;
+  data?: Record<string, unknown>;
+  options?: Array<string | number>;
+  default?: string | number;
+}
+
+interface SettingsControls {
+  backlight?: SettingsValueCall;
+  sleep_timer?: SettingsValueCall;
+}
 
 interface LgRemoteConfig {
   entity: string;
@@ -44,7 +56,10 @@ interface LgRemoteConfig {
   sources?: Array<{ name: string; icon: string }>;
   channels?: unknown;
   color_buttons?: boolean;
+  settings?: SettingsControls;
 }
+
+const SLEEP_TIMER_OPTIONS: Array<string | number> = ["off", 10, 20, 30, 60, 90, 120, 180, 240];
 
 const line1 = "  LG WebOS Remote Control Card  ";
 const line2 = `  version: ${CARD_VERSION}  `;
@@ -70,16 +85,24 @@ if (!windowWithCards.customCards.some((c: any) => c?.type === CARD_TAG_NAME)) {
 
 @customElement(CARD_TAG_NAME)
 export class LgRemoteControl extends LitElement {
-  public hass!: HomeAssistant;
-  public config!: LgRemoteConfig;
-  private _show_inputs: boolean;
-  private _show_sound_output: boolean;
-  private _show_text: boolean;
-  private _show_keypad: boolean;
-  private _show_vol_text: boolean;
-  private volume_value: number;
-  private soundOutput: string;
-  private output_entity: string;
+  /*
+   * `declare` matters: these are reactive (they are in `properties` below), and
+   * a field declaration would be emitted as an own property that shadows the
+   * accessor Lit installs on the prototype, so assignments would never request
+   * an update. With `declare` the declaration is erased and the accessor works.
+   */
+  declare public hass: HomeAssistant;
+  declare public config: LgRemoteConfig;
+  declare private _show_inputs: boolean;
+  declare private _show_sound_output: boolean;
+  declare private _show_text: boolean;
+  declare private _show_keypad: boolean;
+  declare private _show_vol_text: boolean;
+  declare private volume_value: number;
+  declare private soundOutput: string;
+  declare private output_entity: string;
+  declare private backlight_value?: number;
+  declare private sleep_timer_value?: string;
   private valueDisplayTimeout: ReturnType<typeof setTimeout> | undefined;
   private homeIsLongPress: boolean = false;
   private homeLongPressTimer: ReturnType<typeof setTimeout> | undefined;
@@ -122,6 +145,8 @@ export class LgRemoteControl extends LitElement {
       volume_value: { state: true },
       soundOutput: { state: true },
       output_entity: { state: true },
+      backlight_value: { state: true },
+      sleep_timer_value: { state: true },
     };
   }
 
@@ -136,6 +161,8 @@ export class LgRemoteControl extends LitElement {
       changed.has("volume_value") ||
       changed.has("soundOutput") ||
       changed.has("output_entity") ||
+      changed.has("backlight_value") ||
+      changed.has("sleep_timer_value") ||
       changed.has("config")
     )
       return true;
@@ -196,7 +223,7 @@ export class LgRemoteControl extends LitElement {
           style="box-sizing: border-box; --remote-button-color: ${buttonColor}; --remote-text-color: ${textColor}; --remote-color: ${backgroundColor}; --remotewidth: ${remoteWidth};  --main-border-color: ${borderColor}; --main-border-width: ${borderWidth}"
         >
           ${this._renderTitle(tvNameColor)} ${this._renderPower(stateObj, mac, textColor, remoteWidth)}
-          ${this._renderCenter(stateObj, backgroundColor)} ${this._renderSources()} ${this._renderColorButtons()} ${this._renderVolumeChannel(stateObj)} ${this._renderMediaControls()}
+          ${this._renderCenter(stateObj, backgroundColor)} ${this._renderSources()} ${this._renderColorButtons()} ${this._renderSettings()} ${this._renderVolumeChannel(stateObj)} ${this._renderMediaControls()}
                         </div>
         </div>
       </div>
@@ -257,6 +284,79 @@ export class LgRemoteControl extends LitElement {
           ></button>`,
       )}
     </div>`;
+  }
+
+  /*
+   * Optional backlight / sleep timer controls. They render only when the
+   * matching block is configured, and they call whatever service the user
+   * gives: reaching these TV APIs needs root on the TV (see README), which
+   * this card cannot do from the browser.
+   */
+  private _renderSettings() {
+    const cfg = this.config?.settings;
+    if (!this._isSettingsCall(cfg?.backlight) && !this._isSettingsCall(cfg?.sleep_timer)) {
+      return html``;
+    }
+    return html`<div class="grid-container-settings">
+      ${this._renderBacklight()} ${this._renderSleepTimer()}
+    </div>`;
+  }
+
+  private _isSettingsCall(call?: SettingsValueCall): boolean {
+    return typeof call?.service === "string" && call.service.includes(".");
+  }
+
+  private _renderBacklight() {
+    const cfg = this.config?.settings?.backlight;
+    if (!this._isSettingsCall(cfg)) return html``;
+    const current = Math.max(
+      0,
+      Math.min(100, Number(this.backlight_value ?? cfg.default ?? 100) || 0),
+    );
+    return html`<div class="row-settings">
+      <ha-icon icon="mdi:brightness-6"></ha-icon>
+      <input
+        class="slider-settings"
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        .value=${String(current)}
+        @input=${(e: Event) => {
+          this.backlight_value = Number((e.target as HTMLInputElement).value);
+        }}
+        @change=${() => this._callSettingsService("BACKLIGHT", cfg, this.backlight_value)}
+      />
+      <span class="settings-value">${current}</span>
+    </div>`;
+  }
+
+  private _renderSleepTimer() {
+    const cfg = this.config?.settings?.sleep_timer;
+    if (!this._isSettingsCall(cfg)) return html``;
+    const options = cfg.options?.length ? cfg.options : SLEEP_TIMER_OPTIONS;
+    const selected = this.sleep_timer_value ?? `${cfg.default ?? ""}`;
+    return html`<div class="row-settings row-settings-wrap">
+      <ha-icon icon="mdi:timer-outline"></ha-icon>
+      ${options.map(
+        (option) => html`<button
+          type="button"
+          class="btn-settings ${String(option) === selected ? "btn-settings-on" : ""}"
+          @click=${() => {
+            this.sleep_timer_value = String(option);
+            this._callSettingsService("SLEEP_TIMER", cfg, option);
+          }}
+        >
+          ${option === "off" ? "Off" : option}
+        </button>`,
+      )}
+    </div>`;
+  }
+
+  private _callSettingsService(key: string, cfg: SettingsValueCall, value: unknown) {
+    const data = substituteValue(cfg.data ?? {}, value);
+    this._debugLog(`settings ${key} value=${value} service=${cfg.service}`);
+    this.callServiceFromConfig(key, cfg.service, data);
   }
 
   private _renderVolumeChannel(stateObj: any) {
