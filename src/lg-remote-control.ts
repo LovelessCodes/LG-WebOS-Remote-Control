@@ -85,18 +85,24 @@ if (!windowWithCards.customCards.some((c: any) => c?.type === CARD_TAG_NAME)) {
 
 @customElement(CARD_TAG_NAME)
 export class LgRemoteControl extends LitElement {
-  public hass!: HomeAssistant;
-  public config!: LgRemoteConfig;
-  private _show_inputs: boolean;
-  private _show_sound_output: boolean;
-  private _show_text: boolean;
-  private _show_keypad: boolean;
-  private _show_vol_text: boolean;
-  private volume_value: number;
-  private soundOutput: string;
-  private output_entity: string;
-  private backlight_value?: number;
-  private sleep_timer_value?: string;
+  /*
+   * `declare` matters: these are reactive (they are in `properties` below), and
+   * a field declaration would be emitted as an own property that shadows the
+   * accessor Lit installs on the prototype, so assignments would never request
+   * an update. With `declare` the declaration is erased and the accessor works.
+   */
+  declare public hass: HomeAssistant;
+  declare public config: LgRemoteConfig;
+  declare private _show_inputs: boolean;
+  declare private _show_sound_output: boolean;
+  declare private _show_text: boolean;
+  declare private _show_keypad: boolean;
+  declare private _show_vol_text: boolean;
+  declare private volume_value: number;
+  declare private soundOutput: string;
+  declare private output_entity: string;
+  declare private backlight_value?: number;
+  declare private sleep_timer_value?: string;
   private valueDisplayTimeout: ReturnType<typeof setTimeout> | undefined;
   private homeIsLongPress: boolean = false;
   private homeLongPressTimer: ReturnType<typeof setTimeout> | undefined;
