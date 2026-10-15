@@ -171,17 +171,18 @@ settings:
     options: [off, 10, 20, 30, 60, 120]
 ```
 
-| Name                           | Type   | Default | Description                                                             |
-| ------------------------------ | ------ | ------- | ----------------------------------------------------------------------- |
-| `settings.backlight`           | object |         | backlight slider. omitted, no slider is shown                           |
-| `settings.backlight.service`   | string |         | service to call, e.g. `shell_command.lg_tv_backlight`                   |
-| `settings.backlight.data`      | object |         | service data. `$value` is the slider position, 0-100                    |
-| `settings.backlight.default`   | number | 100     | value the slider starts at                                              |
-| `settings.sleep_timer`         | object |         | sleep timer buttons. omitted, no buttons are shown                      |
-| `settings.sleep_timer.service` | string |         | service to call, e.g. `shell_command.lg_tv_sleeptimer`                  |
-| `settings.sleep_timer.data`    | object |         | service data. `$value` is the chosen option                             |
-| `settings.sleep_timer.options` | list   | all     | which buttons to show. default `off, 10, 20, 30, 60, 90, 120, 180, 240` |
-| `settings.sleep_timer.default` | string |         | which button starts selected                                            |
+| Name                           | Type   | Default | Description                                                                                |
+| ------------------------------ | ------ | ------- | ------------------------------------------------------------------------------------------ |
+| `settings.backlight`           | object |         | backlight slider. omitted, no slider is shown                                              |
+| `settings.backlight.service`   | string |         | service to call, e.g. `shell_command.lg_tv_backlight`                                      |
+| `settings.backlight.data`      | object |         | service data. `$value` is the slider position, 0-100                                       |
+| `settings.backlight.default`   | number | 100     | value the slider starts at                                                                 |
+| `settings.backlight.entity`    | string |         | entity holding the TV's current value, e.g. a `command_line` sensor. The slider mirrors it |
+| `settings.sleep_timer`         | object |         | sleep timer buttons. omitted, no buttons are shown                                         |
+| `settings.sleep_timer.service` | string |         | service to call, e.g. `shell_command.lg_tv_sleeptimer`                                     |
+| `settings.sleep_timer.data`    | object |         | service data. `$value` is the chosen option                                                |
+| `settings.sleep_timer.options` | list   | all     | which buttons to show. default `off, 10, 20, 30, 60, 90, 120, 180, 240`                    |
+| `settings.sleep_timer.default` | string |         | which button starts selected                                                               |
 
 Both blocks are independent, and neither is required.
 
@@ -190,6 +191,43 @@ Both blocks are independent, and neither is required.
 `$value` is replaced in every string under `data`, including nested objects and lists. On its
 own it keeps the value's type, so `{"sleepTimeMinute": "$value"}` sends a number; inside a
 longer string it is interpolated as text, e.g. `"level=$value"`.
+
+### Reading the value back
+
+The card cannot show what the TV is actually set to on its own: the value lives on the TV,
+and nothing in Home Assistant can read it over the webOS connection (`Access denied`, as
+above). The script can, and a `command_line` sensor carries it back:
+
+```yaml
+# configuration.yaml
+command_line:
+  - sensor:
+      name: LG TV backlight
+      unique_id: lg_tv_backlight
+      command: "/config/scripts/lg_tv.sh backlight-get"
+      value_template: "{{ value_json.settings.backlight }}"
+      unit_of_measurement: "%"
+```
+
+Point the slider at it, and it shows the TV's value and follows it, including changes made
+with the remote:
+
+```yaml
+settings:
+  backlight:
+    entity: sensor.lg_tv_backlight
+    service: shell_command.lg_tv_backlight
+    data:
+      level: "$value"
+```
+
+Dragging still writes through the service, and the dragged value stays on screen while the
+sensor catches up, rather than snapping back to a stale reading. The sensor polls every 60
+seconds by default; `scan_interval` on the sensor changes that.
+
+Two things to know. While the TV is in standby the command fails and the sensor reads
+unavailable, so the slider falls back to its `default`. And the value is stored per picture
+mode and input, so it reflects the mode you set, not all of them at once.
 
 ### Notes
 

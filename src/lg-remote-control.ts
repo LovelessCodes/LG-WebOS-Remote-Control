@@ -28,8 +28,15 @@ interface SettingsValueCall {
   default?: string | number;
 }
 
+// The backlight can also mirror an entity. Its real value is stored on the TV,
+// which this card has no way to read, so a sensor fed by the same script is how
+// it gets back here.
+interface SettingsBacklightCall extends SettingsValueCall {
+  entity?: string;
+}
+
 interface SettingsControls {
-  backlight?: SettingsValueCall;
+  backlight?: SettingsBacklightCall;
   sleep_timer?: SettingsValueCall;
 }
 
@@ -60,6 +67,10 @@ interface LgRemoteConfig {
 }
 
 const SLEEP_TIMER_OPTIONS: Array<string | number> = ["off", 10, 20, 30, 60, 90, 120, 180, 240];
+
+// after a drag the local value wins for this long, so the slider does not snap
+// back to a sensor that has not caught up yet
+const BACKLIGHT_HOLD_MS = 120000;
 
 const line1 = "  LG WebOS Remote Control Card  ";
 const line2 = `  version: ${CARD_VERSION}  `;
@@ -102,6 +113,7 @@ export class LgRemoteControl extends LitElement {
   declare private soundOutput: string;
   declare private output_entity: string;
   declare private backlight_value?: number;
+  private backlight_held_until?: number;
   declare private sleep_timer_value?: string;
   private valueDisplayTimeout: ReturnType<typeof setTimeout> | undefined;
   private homeIsLongPress: boolean = false;
@@ -169,7 +181,11 @@ export class LgRemoteControl extends LitElement {
     if (!changed.has("hass")) return super.shouldUpdate(changed);
     const oldHass: any = changed.get("hass");
     if (!oldHass) return true;
-    const keys = [this.config?.entity, this.config?.ampli_entity].filter(Boolean);
+    const keys = [
+      this.config?.entity,
+      this.config?.ampli_entity,
+      this.config?.settings?.backlight?.entity,
+    ].filter(Boolean);
     for (const k of keys) if (oldHass.states?.[k] !== this.hass.states?.[k]) return true;
     return false;
   }
@@ -309,10 +325,7 @@ export class LgRemoteControl extends LitElement {
   private _renderBacklight() {
     const cfg = this.config?.settings?.backlight;
     if (!this._isSettingsCall(cfg)) return html``;
-    const current = Math.max(
-      0,
-      Math.min(100, Number(this.backlight_value ?? cfg.default ?? 100) || 0),
-    );
+    const current = this._backlightShown(cfg);
     return html`<div class="row-settings">
       <ha-icon icon="mdi:brightness-6"></ha-icon>
       <input
@@ -324,11 +337,29 @@ export class LgRemoteControl extends LitElement {
         .value=${String(current)}
         @input=${(e: Event) => {
           this.backlight_value = Number((e.target as HTMLInputElement).value);
+          this.backlight_held_until = Date.now() + BACKLIGHT_HOLD_MS;
         }}
         @change=${() => this._callSettingsService("BACKLIGHT", cfg, this.backlight_value)}
       />
       <span class="settings-value">${current}</span>
     </div>`;
+  }
+
+  /*
+   * What the slider shows. With `entity` configured, the value comes from Home
+   * Assistant, which is the only way back: the TV stores it and this card
+   * cannot ask. A drag holds the local value for a moment so the slider does
+   * not jump back to a sensor that has not polled yet.
+   */
+  private _backlightShown(cfg: SettingsBacklightCall): number {
+    const clamp = (n: number): number => Math.max(0, Math.min(100, Math.round(n)));
+    const held = this.backlight_held_until !== undefined && Date.now() < this.backlight_held_until;
+    if (!held && cfg.entity) {
+      const fromEntity = Number(this.hass?.states?.[cfg.entity]?.state);
+      if (Number.isFinite(fromEntity)) return clamp(fromEntity);
+    }
+    const local = Number(this.backlight_value ?? cfg.default ?? 100);
+    return clamp(Number.isFinite(local) ? local : 100);
   }
 
   private _renderSleepTimer() {

@@ -128,6 +128,22 @@
       <h1>Service calls</h1>
       <p class="hint">Exactly what the card sends, newest first.</p>
       <div class="log" id="log"><span class="empty">nothing yet — press something</span></div>
+      <h1 style="margin-top: 18px">Simulate the TV</h1>
+      <p class="hint">
+        The value a backlight sensor reports. Change it and the card follows, as it does when the
+        value is changed with the remote.
+      </p>
+      <div style="display: flex; gap: 8px; align-items: center">
+        <input
+          id="tvValue"
+          type="number"
+          min="0"
+          max="100"
+          value="62"
+          style="width: 76px; padding: 5px"
+        />
+        <button class="ghost" id="simulateTv">change it on the TV</button>
+      </div>
       <h1 style="margin-top: 18px">Card config</h1>
       <textarea id="configText" spellcheck="false"></textarea>
       <button class="ghost" id="apply">Rebuild card with this config</button>
@@ -235,6 +251,12 @@
               app_id: "youtube.leanback.v4",
             },
           },
+          // what a command_line sensor fed by the script reports
+          "sensor.lg_tv_backlight": {
+            entity_id: "sensor.lg_tv_backlight",
+            state: "62",
+            attributes: { unit_of_measurement: "%" },
+          },
         },
         entities: {},
         callService(domain, service, data) {
@@ -260,6 +282,7 @@
         ],
         settings: {
           backlight: {
+            entity: "sensor.lg_tv_backlight",
             service: "shell_command.lg_tv_backlight",
             data: { level: "$value" },
           },
@@ -275,13 +298,36 @@
       const configText = document.getElementById("configText");
       configText.value = JSON.stringify(BASE_CONFIG, null, 2);
 
+      let card = null;
+      // Home Assistant hands a card a new hass object, with a new states map,
+      // on every update, and leaves the previous one alone. Copy, never mutate
+      // in place: a card comparing the two would see its own change as no change.
+      let currentHass = hass;
+
       function build(config) {
         host.innerHTML = "";
-        const card = document.createElement("lg-remote-control");
-        card.hass = hass;
+        card = document.createElement("lg-remote-control");
+        card.hass = currentHass;
         card.setConfig(config);
         host.appendChild(card);
       }
+
+      document.getElementById("simulateTv").addEventListener("click", () => {
+        const value = String(document.getElementById("tvValue").value);
+        currentHass = {
+          ...currentHass,
+          states: {
+            ...currentHass.states,
+            "sensor.lg_tv_backlight": {
+              entity_id: "sensor.lg_tv_backlight",
+              state: value,
+              attributes: { unit_of_measurement: "%" },
+            },
+          },
+        };
+        if (card) card.hass = currentHass;
+        logCall("(harness)", { "backlight sensor": value });
+      });
 
       document.getElementById("apply").addEventListener("click", () => {
         try {
@@ -296,7 +342,13 @@
       });
 
       // handy from a console or an automated check
-      window.__preview = { build, hass, log: (service, data) => logCall(service, data) };
+      window.__preview = {
+        build,
+        log: (service, data) => logCall(service, data),
+        get hass() {
+          return currentHass;
+        },
+      };
     </script>
 
     <!-- the real card bundle: an ES module, as HACS loads it -->
