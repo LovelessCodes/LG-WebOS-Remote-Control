@@ -21,7 +21,7 @@
     "rolldown": "rolldown -c rolldown.config.ts",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
-    "typecheck": "tsc",
+    "typecheck": "tsc-rs",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
     "prepare": "husky"
@@ -41,6 +41,7 @@
     "replace-in-file": "^9.0.0",
     "rolldown": "1.2.6",
     "ts-lit-plugin": "^2.0.2",
+    "tsc-rs": "^0.7.0",
     "typescript": "^7.0.2"
   },
   "lint-staged": {
