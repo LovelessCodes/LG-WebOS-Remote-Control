@@ -15,21 +15,44 @@
     compared side by side:
 
       ?bundle=../released/lg-remote-control.js
+
+    ?theme=dark opens straight into the dark theme; the switch at the top left
+    flips it and remembers the choice.
   -->
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>LG Remote Control card — preview harness</title>
     <style>
+      /*
+       * Home Assistant's two default themes, taken from the frontend's own
+       * color.globals.ts: the light values, and exactly the variables its dark
+       * theme redefines on top of them. Nothing else changes between themes,
+       * not even the primary color.
+       */
       :root {
-        --primary-color: #03a9f4;
+        color-scheme: light;
+        --primary-color: #009ac7;
+        --primary-background-color: #fafafa;
         --primary-text-color: #212121;
         --secondary-text-color: #727272;
-        --secondary-background-color: #e8e8e8;
+        --secondary-background-color: #e5e5e5;
         --card-background-color: #ffffff;
         --ha-card-background: #ffffff;
         --error-color: #db4437;
-        --divider-color: #e0e0e0;
+        --divider-color: rgba(0, 0, 0, 0.12);
+        --ha-box-shadow-s: 0 1px 2px 0 rgba(0, 0, 0, 0.08), 0 1px 3px 0 rgba(0, 0, 0, 0.12);
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --primary-background-color: #111111;
+        --card-background-color: #1c1c1c;
+        --ha-card-background: #1c1c1c;
+        --secondary-background-color: #282828;
+        --primary-text-color: #e1e1e1;
+        --secondary-text-color: #9b9b9b;
+        --divider-color: rgba(225, 225, 225, 0.12);
+        --ha-box-shadow-s: 0 1px 2px 0 rgba(0, 0, 0, 0.4), 0 1px 3px 0 rgba(0, 0, 0, 0.5);
       }
       * {
         box-sizing: border-box;
@@ -37,7 +60,7 @@
       body {
         margin: 0;
         padding: 24px;
-        background: #f4f5f7;
+        background: var(--primary-background-color);
         color: var(--primary-text-color);
         font-family:
           Roboto,
@@ -48,6 +71,34 @@
         gap: 28px;
         align-items: flex-start;
         flex-wrap: wrap;
+      }
+      .head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 4px;
+      }
+      .head h1 {
+        margin: 0;
+      }
+      .switch {
+        display: inline-flex;
+        overflow: hidden;
+        border: 1px solid var(--divider-color);
+        border-radius: 999px;
+      }
+      .switch button {
+        border: 0;
+        background: transparent;
+        color: var(--secondary-text-color);
+        padding: 3px 12px;
+        font-family: inherit;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .switch button[aria-pressed="true"] {
+        background: var(--primary-color);
+        color: #fff;
       }
       h1 {
         font-size: 15px;
@@ -61,7 +112,7 @@
       .stage {
         background: var(--card-background-color);
         border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+        box-shadow: var(--ha-box-shadow-s);
         padding: 16px;
       }
       .panel {
@@ -115,7 +166,13 @@
   </head>
   <body>
     <div>
-      <h1>lg-remote-control</h1>
+      <div class="head">
+        <h1>lg-remote-control</h1>
+        <div class="switch" id="themeSwitch" role="group" aria-label="Theme">
+          <button type="button" data-theme="light">Light</button>
+          <button type="button" data-theme="dark">Dark</button>
+        </div>
+      </div>
       <p class="hint">
         Real card bundle, fake Home Assistant. Buttons call the mock
         <code>hass.callService</code> and show up in the log. Bundle:
@@ -341,9 +398,51 @@
         }
       });
 
+      // --- theme ---
+      // Home Assistant's default light and dark themes. `?theme=` wins, then
+      // the last choice made on this page, then light — the harness has always
+      // opened light, so that stays the default.
+      const THEME_KEY = "lg-preview-theme";
+      const themeSwitch = document.getElementById("themeSwitch");
+
+      function setTheme(theme) {
+        const applied = theme === "dark" ? "dark" : "light";
+        document.documentElement.dataset.theme = applied;
+        for (const button of themeSwitch.querySelectorAll("button")) {
+          button.setAttribute("aria-pressed", String(button.dataset.theme === applied));
+        }
+        return applied;
+      }
+
+      themeSwitch.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-theme]");
+        if (!button) return;
+        const theme = setTheme(button.dataset.theme);
+        try {
+          localStorage.setItem(THEME_KEY, theme);
+        } catch {
+          /* no storage (private mode): the switch still works for this page */
+        }
+        const url = new URL(location.href);
+        url.searchParams.set("theme", theme);
+        history.replaceState(null, "", url);
+      });
+
+      function rememberedTheme() {
+        const fromUrl = new URLSearchParams(location.search).get("theme");
+        if (fromUrl) return fromUrl;
+        try {
+          return localStorage.getItem(THEME_KEY);
+        } catch {
+          return null;
+        }
+      }
+      setTheme(rememberedTheme());
+
       // handy from a console or an automated check
       window.__preview = {
         build,
+        setTheme,
         log: (service, data) => logCall(service, data),
         get hass() {
           return currentHass;

@@ -466,15 +466,22 @@ renders are stubbed, and a fake `hass` writes every service call to a log beside
 so pressing a button shows exactly what would be sent to Home Assistant. The card config is
 editable on the page, and the card rebuilds from it.
 
+The page carries Home Assistant's two default themes — the light and dark palettes from the
+frontend's own `color.globals.ts` — and the switch beside the title flips between them, so
+the card can be checked as it will look in either. The choice is remembered, and `?theme=dark`
+opens in the dark theme directly.
+
 ```bash
 bun run build # or: bun run start, to rebuild on change
 bun run preview # serves the repository on port 8788 and prints the URL
 ```
 
-`?bundle=...` loads a different build, which is handy for comparing against a release:
+`?bundle=...` loads a different build, which is handy for comparing against a release, and
+`?theme=dark` opens in the dark theme:
 
 ```
 http://localhost:8788/dev/preview.html?bundle=../released/lg-remote-control.js
+http://localhost:8788/dev/preview.html?theme=dark
 ```
 
 The port is 8788; `PORT=8789 bun run preview` uses another one.
