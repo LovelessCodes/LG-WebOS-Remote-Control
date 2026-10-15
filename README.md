@@ -419,4 +419,37 @@ image must have 10px margin like this example:
 
 ![all](example/popup.png)
 
+# Development
+
+## Preview the card without Home Assistant
+
+`dev/preview.html` runs the built card against a fake frontend. The two elements the card
+renders are stubbed, and a fake `hass` writes every service call to a log beside the card,
+so pressing a button shows exactly what would be sent to Home Assistant. The card config is
+editable on the page, and the card rebuilds from it.
+
+```bash
+bun run build # or: bun run start, to rebuild on change
+bun run preview # serves the repository on port 8788 and prints the URL
+```
+
+`?bundle=...` loads a different build, which is handy for comparing against a release:
+
+```
+http://localhost:8788/dev/preview.html?bundle=../released/lg-remote-control.js
+```
+
+The port is 8788; `PORT=8789 bun run preview` uses another one.
+
+## Checks
+
+```bash
+bun run lint # oxlint
+bun run fmt:check # oxfmt
+bun run typecheck # tsc-rs
+bun run build # rolldown
+```
+
+All four run in CI on every pull request.
+
 <a href="https://www.buymeacoffee.com/madmicio" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" style="height: 51px !important;width: 217px !important;" ></a>
