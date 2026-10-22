@@ -55,6 +55,7 @@ interface LgRemoteConfig {
     volume_interval?: number;
     debug?: boolean;
     home_long_press?: number;
+    ok_long_press?: number;
   };
   hold_delay?: number;
   hold_interval?: number;
@@ -119,6 +120,10 @@ export class LgRemoteControl extends LitElement {
   private valueDisplayTimeout: ReturnType<typeof setTimeout> | undefined;
   private homeIsLongPress: boolean = false;
   private homeLongPressTimer: ReturnType<typeof setTimeout> | undefined;
+  private okIsLongPress: boolean = false;
+  private okPointerCancelled: boolean = false;
+  private okLongPressTimer: ReturnType<typeof setTimeout> | undefined;
+  private okIgnoreClickUntil = 0;
   private _directionCtrl!: HoldRepeatController;
   private _volumeCtrl!: HoldRepeatController;
 
@@ -715,8 +720,12 @@ export class LgRemoteControl extends LitElement {
       <button
         type="button"
         class="ok_button ripple item_2_c"
-        style="border: solid 2px ${backgroundColor}"
-        @click=${() => this._button("ENTER")}
+        style="border: solid 2px ${backgroundColor}; touch-action: none;"
+        @pointerdown=${(e: PointerEvent) => this._okPointerDown(e)}
+        @pointerup=${(e: PointerEvent) => this._okPointerUp(e)}
+        @pointercancel=${(e: PointerEvent) => this._okPointerCancel(e)}
+        @pointerleave=${(e: PointerEvent) => this._okPointerCancel(e)}
+        @click=${(e: Event) => this._okClick(e)}
       >
         ${this._show_vol_text ? this.volume_value : "OK"}
       </button>
@@ -895,6 +904,68 @@ export class LgRemoteControl extends LitElement {
     this._homePointerUp(event as unknown as PointerEvent);
   }
 
+  private _okPointerDown(e: PointerEvent) {
+    try {
+      (e as any).preventDefault();
+    } catch {}
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+    this.okIsLongPress = false;
+    this.okPointerCancelled = false;
+    clearTimeout(this.okLongPressTimer);
+    this.okLongPressTimer = setTimeout(() => {
+      this.okIsLongPress = true;
+      this._enterLongPress();
+    }, this._okLongPressDelay);
+  }
+  private _okPointerUp(e: PointerEvent) {
+    try {
+      (e as any).preventDefault();
+    } catch {}
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+    clearTimeout(this.okLongPressTimer);
+    const wasLongPress = this.okIsLongPress;
+    const wasCancelled = this.okPointerCancelled;
+    this.okIsLongPress = false;
+    this.okPointerCancelled = false;
+    this.okIgnoreClickUntil = Date.now() + 600;
+    if (!wasLongPress && !wasCancelled) this._button("ENTER");
+  }
+  private _okPointerCancel(e: PointerEvent) {
+    clearTimeout(this.okLongPressTimer);
+    this.okPointerCancelled = true;
+    this.okIgnoreClickUntil = Date.now() + 600;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+  }
+  private _okClick(e: Event) {
+    if (Date.now() < this.okIgnoreClickUntil) {
+      try {
+        e.preventDefault();
+        e.stopPropagation();
+      } catch {}
+      return;
+    }
+    this._button("ENTER");
+  }
+  private _enterLongPress() {
+    this._debugLog("OK long press -> ENTER_LONG_PRESS");
+    this.callServiceFromConfig("ENTER_LONG_PRESS", "webostv.button", {
+      entity_id: this.config.entity,
+      button: "MENU",
+    });
+  }
+
+  private get _okLongPressDelay(): number {
+    const v = this.config?.repeat?.ok_long_press ?? 1000;
+    const n = Number(v);
+    return isNaN(n) ? 1000 : Math.max(300, Math.min(3000, n));
+  }
+
   private get _repeatDelay(): number {
     const v = this.config?.repeat?.delay ?? this.config?.hold_delay ?? 400;
     const n = Number(v);
@@ -1036,8 +1107,10 @@ export class LgRemoteControl extends LitElement {
     this._directionCtrl?.destroy();
     this._volumeCtrl?.destroy();
     clearTimeout(this.homeLongPressTimer);
+    clearTimeout(this.okLongPressTimer);
     clearTimeout(this.valueDisplayTimeout);
     this.homeLongPressTimer = undefined;
+    this.okLongPressTimer = undefined;
     this.valueDisplayTimeout = undefined;
   }
 

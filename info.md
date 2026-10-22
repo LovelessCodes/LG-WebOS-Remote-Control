@@ -324,6 +324,19 @@ action:
 
 to display the "quick menu" (MENU function of WEBOS integration), long press, longer than 1 second, on the "HOME" button
 
+## OK button
+
+long press on the "OK" button to open the TV's "quick menu" (the `MENU` button). a short tap still sends `ENTER`.
+
+the hold delay is configurable (milliseconds, default `1000`):
+
+```yaml
+repeat:
+  ok_long_press: 1000
+```
+
+the hold action can be remapped with the `ENTER_LONG_PRESS` key: see the [override keys](https://github.com/madmicio/LG-WebOS-Remote-Control/blob/master/Override_buttons.md).
+
 ## Color Management
 
 color customization implemented through the section

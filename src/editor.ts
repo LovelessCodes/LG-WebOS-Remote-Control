@@ -301,6 +301,7 @@ export class LgRemoteControlEditor extends LitElement {
     const interval = repeat?.interval ?? 150;
     const volume_delay = repeat?.volume_delay ?? delay;
     const volume_interval = repeat?.volume_interval ?? interval;
+    const ok_long_press = repeat?.ok_long_press ?? 1000;
     const debug = repeat?.debug ?? this._config?.debug ?? false;
     const hasVolumeOverride =
       repeat?.volume_delay !== undefined || repeat?.volume_interval !== undefined;
@@ -327,12 +328,17 @@ export class LgRemoteControlEditor extends LitElement {
           </input>
           <br>
           <br>
+          <label for="repeat_ok_long_press">OK long-press delay: ${ok_long_press}ms</label><br>
+          <input type="range" min="300" max="3000" step="50" .value="${ok_long_press}" id="repeat_ok_long_press" name="ok_long_press" @input=${this.repeatConfigChanged} style="width: 40ch;">
+          </input>
+          <br>
+          <br>
           <label for="repeat_debug" style="display:flex; align-items:center; gap:0.6em;">
             <input type="checkbox" id="repeat_debug" name="debug" .checked=${!!debug} @change=${this.repeatDebugChanged} />
             Enable debug logging (console)
           </label>
           <br>
-          <small style="opacity:0.7">Hold D-pad or Volume (+/-) to repeat faster. Short tap = single step. Debug shows fires in browser console (F12).</small>
+          <small style="opacity:0.7">Hold D-pad or Volume (+/-) to repeat. Hold OK to open the TV menu; a short tap sends ENTER. Debug logs fires to the browser console (F12).</small>
           <br>
           <br>
         `;

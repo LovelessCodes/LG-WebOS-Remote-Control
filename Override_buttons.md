@@ -39,6 +39,7 @@ available keys:
 - `"UP"`
 - `"LEFT"`
 - `"ENTER"`
+- `"ENTER_LONG_PRESS"`
 - `"RIGHT"`
 - `"BACK"`
 - `"DOWN"`
@@ -61,6 +62,8 @@ available keys:
 - `"POWER"`
 - `"VOLUME_UP"`
 - `"VOLUME_DOWN"`
+
+`ENTER_LONG_PRESS` fires when the OK button is held past `repeat.ok_long_press` (default `1000` ms). Without an override it sends the `MENU` button.
 
 ## Virtual keys
 
