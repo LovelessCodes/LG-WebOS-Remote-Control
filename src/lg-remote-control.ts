@@ -122,6 +122,7 @@ export class LgRemoteControl extends LitElement {
   private homeLongPressTimer: ReturnType<typeof setTimeout> | undefined;
   private okIsLongPress: boolean = false;
   private okPointerCancelled: boolean = false;
+  private okPointerDownAt = 0;
   private okLongPressTimer: ReturnType<typeof setTimeout> | undefined;
   private okIgnoreClickUntil = 0;
   private _directionCtrl!: HoldRepeatController;
@@ -913,10 +914,10 @@ export class LgRemoteControl extends LitElement {
     } catch {}
     this.okIsLongPress = false;
     this.okPointerCancelled = false;
+    this.okPointerDownAt = Date.now();
     clearTimeout(this.okLongPressTimer);
     this.okLongPressTimer = setTimeout(() => {
       this.okIsLongPress = true;
-      this._enterLongPress();
     }, this._okLongPressDelay);
   }
   private _okPointerUp(e: PointerEvent) {
@@ -929,14 +930,19 @@ export class LgRemoteControl extends LitElement {
     clearTimeout(this.okLongPressTimer);
     const wasLongPress = this.okIsLongPress;
     const wasCancelled = this.okPointerCancelled;
+    const holdMs = this.okPointerDownAt ? Date.now() - this.okPointerDownAt : 0;
     this.okIsLongPress = false;
     this.okPointerCancelled = false;
+    this.okPointerDownAt = 0;
     this.okIgnoreClickUntil = Date.now() + 600;
-    if (!wasLongPress && !wasCancelled) this._button("ENTER");
+    if (wasCancelled) return;
+    if (wasLongPress) this._enterLongPress(holdMs);
+    else this._button("ENTER");
   }
   private _okPointerCancel(e: PointerEvent) {
     clearTimeout(this.okLongPressTimer);
     this.okPointerCancelled = true;
+    this.okPointerDownAt = 0;
     this.okIgnoreClickUntil = Date.now() + 600;
     try {
       (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
@@ -952,12 +958,17 @@ export class LgRemoteControl extends LitElement {
     }
     this._button("ENTER");
   }
-  private _enterLongPress() {
-    this._debugLog("OK long press -> ENTER_LONG_PRESS");
-    this.callServiceFromConfig("ENTER_LONG_PRESS", "webostv.button", {
-      entity_id: this.config.entity,
-      button: "MENU",
-    });
+  private _enterLongPress(holdMs: number) {
+    this._debugLog(`OK long press (${holdMs}ms) -> ENTER_LONG_PRESS`);
+    this.callServiceFromConfig(
+      "ENTER_LONG_PRESS",
+      "webostv.button",
+      {
+        entity_id: this.config.entity,
+        button: "MENU",
+      },
+      holdMs,
+    );
   }
 
   private get _okLongPressDelay(): number {
@@ -1155,7 +1166,12 @@ export class LgRemoteControl extends LitElement {
     return 4;
   }
 
-  callServiceFromConfig(key: string, service: string, serviceData: Record<string, any>) {
+  callServiceFromConfig(
+    key: string,
+    service: string,
+    serviceData: Record<string, any>,
+    substitution?: unknown,
+  ) {
     let serviceToUse = service;
     let serviceDataToUse = serviceData;
     if (this.config.keys && Object.prototype.hasOwnProperty.call(this.config.keys, key)) {
@@ -1163,6 +1179,9 @@ export class LgRemoteControl extends LitElement {
       if (typeof keyConfig?.service === "string" && keyConfig.service.includes(".")) {
         serviceToUse = keyConfig["service"];
         serviceDataToUse = keyConfig["data"] ?? serviceData;
+        if (substitution !== undefined && keyConfig["data"]) {
+          serviceDataToUse = substituteValue(keyConfig["data"], substitution);
+        }
       } else {
         console.warn(
           `[lg-remote:${this.config?.entity}] invalid keys[${key}].service:`,

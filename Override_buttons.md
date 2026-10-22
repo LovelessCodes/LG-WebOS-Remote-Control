@@ -63,7 +63,7 @@ available keys:
 - `"VOLUME_UP"`
 - `"VOLUME_DOWN"`
 
-`ENTER_LONG_PRESS` fires when the OK button is held past `repeat.ok_long_press` (default `1000` ms). Without an override it sends the `MENU` button.
+`ENTER_LONG_PRESS` fires when the OK button is held past `repeat.ok_long_press` (default `1000` ms). The measured hold is available as `$value` in the override's `data`, in milliseconds. Without an override it sends the `MENU` button; see the README for a rooted-TV held-key example.
 
 ## Virtual keys
 

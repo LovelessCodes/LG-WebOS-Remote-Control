@@ -338,7 +338,7 @@ export class LgRemoteControlEditor extends LitElement {
             Enable debug logging (console)
           </label>
           <br>
-          <small style="opacity:0.7">Hold D-pad or Volume (+/-) to repeat. Hold OK to open the TV menu; a short tap sends ENTER. Debug logs fires to the browser console (F12).</small>
+          <small style="opacity:0.7">Hold D-pad or Volume (+/-) to repeat. Hold OK to fire ENTER_LONG_PRESS when released (default: MENU); a short tap sends ENTER. Debug logs fires to the browser console (F12).</small>
           <br>
           <br>
         `;

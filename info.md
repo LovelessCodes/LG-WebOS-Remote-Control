@@ -326,16 +326,41 @@ to display the "quick menu" (MENU function of WEBOS integration), long press, lo
 
 ## OK button
 
-long press on the "OK" button to open the TV's "quick menu" (the `MENU` button). a short tap still sends `ENTER`.
+a short tap sends `ENTER`. holding past `repeat.ok_long_press` (default `1000` ms) fires the
+`ENTER_LONG_PRESS` key with the measured hold time in `$value`.
 
-the hold delay is configurable (milliseconds, default `1000`):
+Home Assistant's `webostv.button` action can only send a complete press, not key-down/key-up,
+so without an override `ENTER_LONG_PRESS` sends `MENU` as a substitute.
+
+### Sending a genuinely held ENTER
+
+To make the TV receive a real held key, use the `keyhold` command in
+[extras/lg_tv.sh](extras/lg_tv.sh) on a **rooted** TV with SSH (the same setup as the backlight
+controls). It writes key-down, waits for the measured hold, then key-up.
 
 ```yaml
-repeat:
-  ok_long_press: 1000
+# configuration.yaml
+shell_command:
+  lg_tv_keyhold: "/config/scripts/lg_tv.sh keyhold {{ key }} {{ hold_ms }}"
 ```
 
-the hold action can be remapped with the `ENTER_LONG_PRESS` key: see the [override keys](https://github.com/madmicio/LG-WebOS-Remote-Control/blob/master/Override_buttons.md).
+```yaml
+# card
+repeat:
+  ok_long_press: 1000
+keys:
+  ENTER_LONG_PRESS:
+    service: shell_command.lg_tv_keyhold
+    data:
+      key: ENTER
+      hold_ms: "$value"
+```
+
+`$value` is the number of milliseconds OK was held. The helper is called when you release OK, so
+the held key starts at release and lasts for the measured time.
+
+the hold delay is `repeat.ok_long_press` (milliseconds, default `1000`), and the action can be
+remapped with the `ENTER_LONG_PRESS` key: see the [override keys](https://github.com/madmicio/LG-WebOS-Remote-Control/blob/master/Override_buttons.md).
 
 ## Color Management
 
