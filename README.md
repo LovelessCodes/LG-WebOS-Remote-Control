@@ -377,22 +377,29 @@ image must have 10px margin like this example:
 
 # Development
 
-## Preview the card without Home Assistant
-
-`dev/preview.html` runs the built card against a fake frontend. The two elements the card
-renders are stubbed, and a fake `hass` writes every service call to a log beside the card,
-so pressing a button shows exactly what would be sent to Home Assistant. The card config is
-editable on the page, and the card rebuilds from it.
-
-The page carries Home Assistant's two default themes — the light and dark palettes from the
-frontend's own `color.globals.ts` — and the switch beside the title flips between them, so
-the card can be checked as it will look in either. The choice is remembered, and `?theme=dark`
-opens in the dark theme directly.
+## Play with the card locally
 
 ```bash
-bun run build # or: bun run start, to rebuild on change
-bun run preview # serves the repository on port 8788 and prints the URL
+bun install
+bun run dev
 ```
+
+`bun run dev` builds the card, watches `src/`, serves `dev/preview.html` on port 8788, and
+reloads the page when the bundle changes. For a one-shot build and serve instead:
+
+```bash
+bun run preview
+```
+
+The page is a fake Home Assistant with a working fake TV beside it:
+
+- The card is the real built bundle, so every button sends the same service calls it would send
+  in Home Assistant.
+- The fake TV reacts to power, volume, mute, sources, sound output, channel keys, media
+  controls and the text input.
+- Every service call appears in the log.
+- Edit the card config on the page and press **Rebuild card with this config**.
+- The switch beside the title flips between Home Assistant's default light and dark palettes.
 
 `?bundle=...` loads a different build, which is handy for comparing against a release, and
 `?theme=dark` opens in the dark theme:
@@ -402,7 +409,7 @@ http://localhost:8788/dev/preview.html?bundle=../released/lg-remote-control.js
 http://localhost:8788/dev/preview.html?theme=dark
 ```
 
-The port is 8788; `PORT=8789 bun run preview` uses another one.
+The port is 8788; `PORT=8789 bun run dev` (or `bun run preview`) uses another one.
 
 ## Checks
 

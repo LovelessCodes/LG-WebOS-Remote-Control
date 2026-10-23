@@ -1,11 +1,10 @@
 /*
  * Static file server for dev/preview.html, with no dependencies.
  *
- * `bun run preview` (or `node dev/serve.ts`), then open the printed URL. It
- * serves the repository root so the harness can load dist/lg-remote-control.js
- * the same way a browser would, and nothing else: no watching, no rebuilding.
- * Run `bun run build` first, or `bun run start` in another terminal to rebuild
- * on change, then reload the page.
+ * `bun run preview` builds once and serves the repository root so the harness
+ * can load dist/lg-remote-control.js the same way a browser would. `bun run
+ * dev` additionally watches src/ and rebuilds the bundle; the preview page
+ * polls the ETag below and reloads itself when the bundle changes.
  */
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer } from "node:http";
@@ -36,10 +35,18 @@ const server = createServer((req, res) => {
     return;
   }
 
+  const info = statSync(target);
   res.writeHead(200, {
     "content-type": contentTypes[extname(target)] ?? "application/octet-stream",
+    "content-length": info.size,
+    "last-modified": info.mtime.toUTCString(),
+    etag: `"${info.size.toString(16)}-${Math.floor(info.mtimeMs).toString(16)}"`,
     "cache-control": "no-store",
   });
+  if (req.method === "HEAD") {
+    res.end();
+    return;
+  }
   createReadStream(target).pipe(res);
 });
 
@@ -54,5 +61,5 @@ server.on("error", (err: NodeJS.ErrnoException) => {
 
 server.listen(port, () => {
   console.log(`card preview: http://localhost:${port}/dev/preview.html`);
-  console.log("if the card does not appear, run `bun run build` (or `bun run start`) first");
+  console.log("if the card does not appear, run `bun run build` first");
 });

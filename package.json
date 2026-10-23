@@ -16,7 +16,8 @@
   "module": "lg-remote-card.js",
   "scripts": {
     "start": "rolldown -c rolldown.config.ts --watch",
-    "preview": "bun dev/serve.ts",
+    "dev": "bun dev/dev.ts",
+    "preview": "bun run build && bun dev/serve.ts",
     "build": "npm run rolldown && npm run add-version",
     "add-version": "cross-var replace-in-file \"@LG_REMOTE_CONTROL_CARD_VERSION_PLACEHOLDER@\" \"$npm_package_version\" \"dist/lg-remote-control.js\"",
     "rolldown": "rolldown -c rolldown.config.ts",

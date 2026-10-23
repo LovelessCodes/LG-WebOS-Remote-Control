@@ -143,6 +143,42 @@
       .log .err {
         color: #f48771;
       }
+      .tv {
+        background: #0f1419;
+        color: #d7e3ee;
+        border: 1px solid #2a323d;
+        border-radius: 12px;
+        padding: 14px;
+        font-size: 12px;
+        line-height: 1.7;
+      }
+      .tv .screen {
+        min-height: 62px;
+        background: #05080b;
+        border-radius: 7px;
+        padding: 10px;
+        margin-bottom: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .tv .screen .big {
+        font-size: 15px;
+        font-weight: 600;
+      }
+      .tv .screen .text {
+        color: #9cdcfe;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .tv .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .tv .row span:first-child {
+        color: #8a9aaa;
+      }
       textarea {
         width: 100%;
         height: 190px;
@@ -182,7 +218,24 @@
     </div>
 
     <div class="panel">
-      <h1>Service calls</h1>
+      <h1>Fake TV</h1>
+      <div class="tv">
+        <div class="screen">
+          <div class="big" id="tvPower">ON</div>
+          <div id="tvSource">YouTube</div>
+          <div class="text" id="tvText">(TV text field empty)</div>
+        </div>
+        <div class="row"><span>Volume</span><strong id="tvVolume">24</strong></div>
+        <div class="row"><span>Mute</span><strong id="tvMute">off</strong></div>
+        <div class="row"><span>Sound</span><strong id="tvSound">tv_speaker</strong></div>
+        <div class="row"><span>Channel</span><strong id="tvChannel">501</strong></div>
+        <div class="row"><span>Playback</span><strong id="tvPlayback">playing</strong></div>
+        <div class="row"><span>Last key</span><strong id="tvLastKey">—</strong></div>
+        <div class="row"><span>Last command</span><strong id="tvLastCommand">—</strong></div>
+      </div>
+      <button class="ghost" id="resetTv">Reset the TV</button>
+
+      <h1 style="margin-top: 18px">Service calls</h1>
       <p class="hint">Exactly what the card sends, newest first.</p>
       <div class="log" id="log"><span class="empty">nothing yet — press something</span></div>
       <h1 style="margin-top: 18px">Card config</h1>
@@ -279,37 +332,211 @@
         logEl.prepend(line);
       });
 
-      const hass = {
-        states: {
-          "media_player.lg_webos_tv": {
-            entity_id: "media_player.lg_webos_tv",
-            state: "on",
-            attributes: {
-              volume_level: 0.24,
-              is_volume_muted: false,
-              sound_output: "tv_speaker",
-              source: "YouTube",
-              source_list: ["YouTube", "Netflix", "HDMI 1", "HDMI 2", "Live TV"],
-              app_id: "youtube.leanback.v4",
-            },
-          },
-        },
-        entities: {},
-        callService(domain, service, data) {
-          logCall(`${domain}.${service}`, data);
-          return Promise.resolve();
-        },
-        callWS() {
-          return Promise.resolve();
-        },
+      // --- fake TV ---
+      const ENTITY = "media_player.lg_webos_tv";
+      const TV_SOURCES = [
+        "YouTube",
+        "Netflix",
+        "Prime Video",
+        "Disney+",
+        "HDMI 1",
+        "HDMI 2",
+        "Live TV",
+      ];
+      const tv = {
+        power: "on",
+        volume: 24,
+        muted: false,
+        source: "YouTube",
+        soundOutput: "tv_speaker",
+        channel: 501,
+        channelInput: "",
+        text: "",
+        submitted: false,
+        playback: "playing",
+        lastKey: "—",
+        lastCommand: "—",
       };
+      const tvEl = (id) => document.getElementById(id);
+
+      function makeState() {
+        return {
+          entity_id: ENTITY,
+          state: tv.power,
+          attributes: {
+            friendly_name: "LG webOS TV",
+            volume_level: tv.volume / 100,
+            is_volume_muted: tv.muted,
+            sound_output: tv.soundOutput,
+            source: tv.source,
+            source_list: TV_SOURCES,
+            app_id: "youtube.leanback.v4",
+            media_title: `Channel ${tv.channel}`,
+          },
+        };
+      }
+
+      function makeHass() {
+        return {
+          states: { [ENTITY]: makeState() },
+          entities: {},
+          callService(domain, service, data) {
+            logCall(`${domain}.${service}`, data);
+            handleService(domain, service, data);
+            pushHass();
+            return Promise.resolve();
+          },
+          callWS() {
+            return Promise.resolve();
+          },
+        };
+      }
+
+      function handleService(domain, service, data) {
+        const value = data ?? {};
+        if (domain === "media_player") {
+          if (service === "turn_off") {
+            tv.power = "off";
+            tv.playback = "off";
+          } else if (service === "turn_on") {
+            tv.power = "on";
+          } else if (service === "volume_up") {
+            setVolume(tv.volume + 1, "VOLUMEUP");
+          } else if (service === "volume_down") {
+            setVolume(tv.volume - 1, "VOLUMEDOWN");
+          } else if (service === "select_source") {
+            tv.source = value.source ?? tv.source;
+          }
+        } else if (domain === "wake_on_lan" && service === "send_magic_packet") {
+          setTimeout(() => {
+            tv.power = "on";
+            pushHass();
+          }, 700);
+        } else if (domain === "webostv") {
+          if (service === "button") {
+            handleButton(value.button);
+          } else if (service === "select_sound_output") {
+            tv.soundOutput = value.sound_output ?? tv.soundOutput;
+          } else if (service === "command") {
+            handleCommand(value.command, value.payload);
+          }
+        } else {
+          tv.lastCommand = `${domain}.${service}`;
+        }
+      }
+
+      function setVolume(volume, key) {
+        tv.volume = Math.max(0, Math.min(100, volume));
+        tv.muted = false;
+        tv.lastKey = key;
+      }
+
+      function handleButton(button) {
+        if (!button) return;
+        tv.lastKey = button;
+        if (button === "MUTE") {
+          tv.muted = !tv.muted;
+        } else if (button === "CHANNELUP") {
+          tv.channel += 1;
+          tv.channelInput = "";
+        } else if (button === "CHANNELDOWN") {
+          tv.channel = Math.max(1, tv.channel - 1);
+          tv.channelInput = "";
+        } else if (button === "POWER") {
+          tv.power = tv.power === "on" ? "off" : "on";
+        } else if (button === "ENTER") {
+          if (tv.channelInput) {
+            tv.channel = Number(tv.channelInput) || tv.channel;
+            tv.channelInput = "";
+          }
+        } else if (/^[0-9]$/.test(button)) {
+          tv.channelInput = (tv.channelInput + button).slice(0, 4);
+        }
+      }
+
+      function handleCommand(command, payload) {
+        if (!command) return;
+        tv.lastCommand = command;
+        const value = payload ?? {};
+        if (command === "com.webos.service.ime/insertText") {
+          const text = String(value.text ?? "");
+          tv.text = value.replace ? text : tv.text + text;
+          tv.submitted = false;
+        } else if (command === "com.webos.service.ime/deleteCharacters") {
+          const count = Math.max(1, Number(value.count) || 1);
+          tv.text = tv.text.slice(0, Math.max(0, tv.text.length - count));
+          tv.submitted = false;
+        } else if (command === "com.webos.service.ime/sendEnterKey") {
+          tv.submitted = true;
+        } else if (command.startsWith("media.controls/")) {
+          const action = command.split("/")[1];
+          tv.playback =
+            action === "play"
+              ? "playing"
+              : action === "pause"
+                ? "paused"
+                : action === "stop"
+                  ? "stopped"
+                  : action === "rewind"
+                    ? "rewinding"
+                    : action === "fastForward"
+                      ? "forwarding"
+                      : action === "Record"
+                        ? "recording"
+                        : action;
+        }
+      }
+
+      function renderTv() {
+        tvEl("tvPower").textContent = tv.power === "on" ? "ON" : "OFF";
+        tvEl("tvSource").textContent = tv.power === "on" ? tv.source : "standby";
+        tvEl("tvText").textContent = tv.text
+          ? tv.text + (tv.submitted ? "  ↵" : "")
+          : "(TV text field empty)";
+        tvEl("tvVolume").textContent = String(tv.volume);
+        tvEl("tvMute").textContent = tv.muted ? "on" : "off";
+        tvEl("tvSound").textContent = tv.soundOutput;
+        tvEl("tvChannel").textContent = tv.channelInput
+          ? `${tv.channel} → ${tv.channelInput}`
+          : String(tv.channel);
+        tvEl("tvPlayback").textContent = tv.playback;
+        tvEl("tvLastKey").textContent = tv.lastKey;
+        tvEl("tvLastCommand").textContent = tv.lastCommand;
+      }
+
+      let currentHass = makeHass();
+      let cardInstance = null;
+
+      function pushHass() {
+        currentHass = makeHass();
+        if (cardInstance) cardInstance.hass = currentHass;
+        renderTv();
+      }
+
+      function resetTv() {
+        Object.assign(tv, {
+          power: "on",
+          volume: 24,
+          muted: false,
+          source: "YouTube",
+          soundOutput: "tv_speaker",
+          channel: 501,
+          channelInput: "",
+          text: "",
+          submitted: false,
+          playback: "playing",
+          lastKey: "—",
+          lastCommand: "—",
+        });
+        pushHass();
+      }
 
       const BASE_CONFIG = {
         type: "custom:lg-remote-control",
-        entity: "media_player.lg_webos_tv",
+        entity: ENTITY,
         name: "Living Room OLED",
         mac: "AA:BB:CC:DD:EE:FF",
-        color_buttons: false,
+        color_buttons: true,
         sources: [
           { name: "Netflix", icon: "mdi:netflix" },
           { name: "YouTube", icon: "mdi:youtube-tv" },
@@ -320,7 +547,7 @@
         keys: {
           BACK_LONG_PRESS: {
             service: "webostv.button",
-            data: { entity_id: "media_player.lg_webos_tv", button: "HOME" },
+            data: { entity_id: ENTITY, button: "HOME" },
           },
         },
       };
@@ -329,15 +556,19 @@
       const configText = document.getElementById("configText");
       configText.value = JSON.stringify(BASE_CONFIG, null, 2);
 
-      const currentHass = hass;
-
       function build(config) {
         host.innerHTML = "";
-        const card = document.createElement("lg-remote-control");
-        card.hass = currentHass;
-        card.setConfig(config);
-        host.appendChild(card);
+        cardInstance = document.createElement("lg-remote-control");
+        cardInstance.hass = currentHass;
+        cardInstance.setConfig(config);
+        host.appendChild(cardInstance);
+        renderTv();
       }
+
+      document.getElementById("resetTv").addEventListener("click", () => {
+        resetTv();
+        logCall("(harness)", { reset: true });
+      });
 
       document.getElementById("apply").addEventListener("click", () => {
         try {
@@ -396,6 +627,9 @@
       window.__preview = {
         build,
         setTheme,
+        tv,
+        resetTv,
+        renderTv,
         log: (service, data) => logCall(service, data),
         get hass() {
           return currentHass;
@@ -408,8 +642,43 @@
       const params = new URLSearchParams(location.search);
       const bundle = params.get("bundle") || "../dist/lg-remote-control.js";
       document.getElementById("bundleName").textContent = bundle;
-      await import(bundle);
-      window.__preview.build(JSON.parse(document.getElementById("configText").value));
+
+      const bundleUrl = new URL(bundle, location.href).href;
+      let lastEtag = null;
+
+      async function watchBundle() {
+        try {
+          const res = await fetch(bundleUrl, { method: "HEAD", cache: "no-store" });
+          const etag = res.headers.get("etag");
+          if (lastEtag && etag && etag !== lastEtag) {
+            location.reload();
+            return;
+          }
+          lastEtag = etag || lastEtag;
+        } catch {
+          /* the server may be down; try again */
+        }
+        setTimeout(watchBundle, 1000);
+      }
+
+      let attempt = 0;
+      async function loadBundle() {
+        const url = attempt
+          ? `${bundle}${bundle.includes("?") ? "&" : "?"}retry=${Date.now()}`
+          : bundle;
+        try {
+          await import(url);
+        } catch (err) {
+          attempt += 1;
+          window.__preview.log("(harness)", { bundle: String(err), attempt });
+          setTimeout(loadBundle, 1000);
+          return;
+        }
+        window.__preview.build(JSON.parse(document.getElementById("configText").value));
+        watchBundle();
+      }
+
+      loadBundle();
     </script>
   </body>
 </html>
