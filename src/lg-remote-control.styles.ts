@@ -92,8 +92,46 @@ export const remoteStyles = css`
     background-color: transparent;
     background-color: var(--remote-button-color);
     border-radius: 35px;
+    width: 100%;
+    height: auto;
+    flex: 1;
+    margin: 0;
+  }
+  .keypad-panel {
+    display: flex;
+    flex-direction: column;
     width: calc(var(--remotewidth) - 10%);
+    height: var(--remotewidth);
     margin: auto;
+    gap: calc(var(--remotewidth)/40);
+  }
+  .keypad-text-row {
+    display: flex;
+    flex: 0 0 calc(var(--remotewidth)/7);
+    gap: calc(var(--remotewidth)/50);
+  }
+  .keypad-text {
+    flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
+    border: 0;
+    border-radius: calc(var(--remotewidth)/20);
+    background-color: var(--remote-button-color);
+    color: var(--remote-text-color);
+    padding: 0 calc(var(--remotewidth)/25);
+    font-size: calc(var(--remotewidth)/20);
+    outline: none;
+  }
+  .keypad-text::placeholder {
+    color: var(--remote-text-color);
+    opacity: 0.6;
+  }
+  .keypad-panel .keypad-send {
+    flex: 0 0 calc(var(--remotewidth)/7);
+    width: calc(var(--remotewidth)/7);
+    height: 100%;
+    border-radius: calc(var(--remotewidth)/20);
+    background-color: var(--remote-button-color);
   }
   .grid-container-input,
   .grid-container-sound {
@@ -124,68 +162,6 @@ export const remoteStyles = css`
   }
   .grid-container-color_btn {
     height: calc(var(--remotewidth)/10);
-  }
-  .grid-container-settings {
-    display: block;
-    width: calc(var(--remotewidth)/1.03);
-    margin: calc(var(--remotewidth)/30) auto 0 auto;
-  }
-  /*
-   * The sliders, as Bubble Card draws them: a pill with an accent fill that
-   * slides in from the left, and the icon and value riding on top of it.
-   * --slider-fill-at is the fill's position, 0-100. The fill is held at 70%
-   * so what sits on it stays readable, over the fill and over the empty track
-   * alike, in either theme.
-   */
-  .slider {
-    position: relative;
-    overflow: hidden;
-    height: calc(var(--remotewidth)/9);
-    margin: calc(var(--remotewidth)/40) 0;
-    border-radius: 999px;
-    background-color: var(--remote-button-color);
-    cursor: ew-resize;
-  }
-  .slider-fill {
-    position: absolute;
-    inset: 0;
-    background-color: var(--primary-color);
-    opacity: 0.7;
-    transform: translateX(calc(var(--slider-fill-at, 0) * 1% - 100%));
-    transition: transform 0.5s ease-in-out;
-  }
-  /* the fill follows the pointer, it does not glide after it */
-  .slider.is-dragging .slider-fill {
-    transition: none;
-  }
-  .slider-icon,
-  .slider-value {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--remote-text-color);
-    pointer-events: none;
-  }
-  .slider-icon {
-    left: calc(var(--remotewidth)/20);
-    width: calc(var(--remotewidth)/14);
-    height: calc(var(--remotewidth)/14);
-  }
-  .slider-value {
-    right: calc(var(--remotewidth)/18);
-    font-size: calc(var(--remotewidth)/22);
-  }
-  /* the real control: invisible over the pill, so the whole track drags */
-  .slider-input {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    appearance: none;
-    -webkit-appearance: none;
-    opacity: 0;
-    cursor: ew-resize;
   }
   .grid-container-media-control,
   .grid-container-volume-channel-control {
@@ -376,6 +352,8 @@ export const remoteStyles = css`
     border-width: 0;
   }
   .btn-keypad {
+    display: grid;
+    place-items: center;
     background-color: transparent;
     font-size: calc(var(--remotewidth)/10);
     width: 100%;

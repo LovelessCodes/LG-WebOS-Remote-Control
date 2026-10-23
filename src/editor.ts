@@ -302,6 +302,7 @@ export class LgRemoteControlEditor extends LitElement {
     const volume_delay = repeat?.volume_delay ?? delay;
     const volume_interval = repeat?.volume_interval ?? interval;
     const ok_long_press = repeat?.ok_long_press ?? 1000;
+    const key_long_press = repeat?.key_long_press ?? 600;
     const debug = repeat?.debug ?? this._config?.debug ?? false;
     const hasVolumeOverride =
       repeat?.volume_delay !== undefined || repeat?.volume_interval !== undefined;
@@ -333,12 +334,17 @@ export class LgRemoteControlEditor extends LitElement {
           </input>
           <br>
           <br>
+          <label for="repeat_key_long_press">Key long-press delay: ${key_long_press}ms</label><br>
+          <input type="range" min="200" max="2000" step="50" .value="${key_long_press}" id="repeat_key_long_press" name="key_long_press" @input=${this.repeatConfigChanged} style="width: 40ch;">
+          </input>
+          <br>
+          <br>
           <label for="repeat_debug" style="display:flex; align-items:center; gap:0.6em;">
             <input type="checkbox" id="repeat_debug" name="debug" .checked=${!!debug} @change=${this.repeatDebugChanged} />
             Enable debug logging (console)
           </label>
           <br>
-          <small style="opacity:0.7">Hold D-pad or Volume (+/-) to repeat. Hold OK to fire ENTER_LONG_PRESS when released (default: MENU); a short tap sends ENTER. Debug logs fires to the browser console (F12).</small>
+          <small style="opacity:0.7">Hold D-pad or Volume (+/-) to repeat. Hold OK for ENTER_LONG_PRESS (default: MENU). Other keys use keys.&lt;KEY&gt;_LONG_PRESS. A short tap sends the normal key.</small>
           <br>
           <br>
         `;

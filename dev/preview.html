@@ -185,22 +185,6 @@
       <h1>Service calls</h1>
       <p class="hint">Exactly what the card sends, newest first.</p>
       <div class="log" id="log"><span class="empty">nothing yet — press something</span></div>
-      <h1 style="margin-top: 18px">Simulate the TV</h1>
-      <p class="hint">
-        The value a backlight sensor reports. Change it and the card follows, as it does when the
-        value is changed with the remote.
-      </p>
-      <div style="display: flex; gap: 8px; align-items: center">
-        <input
-          id="tvValue"
-          type="number"
-          min="0"
-          max="100"
-          value="62"
-          style="width: 76px; padding: 5px"
-        />
-        <button class="ghost" id="simulateTv">change it on the TV</button>
-      </div>
       <h1 style="margin-top: 18px">Card config</h1>
       <textarea id="configText" spellcheck="false"></textarea>
       <button class="ghost" id="apply">Rebuild card with this config</button>
@@ -233,8 +217,9 @@
         "mdi:headphones": "🎧",
         "mdi:television-classic": "📺",
         "mdi:bluetooth": "ᛒ",
-        "mdi:brightness-6": "🔆",
-        "mdi:timer-outline": "⏱",
+        "mdi:send": "➤",
+        "mdi:backspace-outline": "⌫",
+        "mdi:keyboard-return": "↵",
         "mdi:youtube-tv": "▶",
         "mdi:netflix": "N",
         "mdi:video-input-hdmi": "HDMI",
@@ -308,12 +293,6 @@
               app_id: "youtube.leanback.v4",
             },
           },
-          // what a command_line sensor fed by the script reports
-          "sensor.lg_tv_backlight": {
-            entity_id: "sensor.lg_tv_backlight",
-            state: "62",
-            attributes: { unit_of_measurement: "%" },
-          },
         },
         entities: {},
         callService(domain, service, data) {
@@ -337,16 +316,11 @@
           { name: "Prime Video", icon: "amazon" },
           { name: "Disney+", icon: "disney" },
         ],
-        settings: {
-          backlight: {
-            entity: "sensor.lg_tv_backlight",
-            service: "shell_command.lg_tv_backlight",
-            data: { level: "$value" },
-          },
-          sleep_timer: {
-            service: "shell_command.lg_tv_sleeptimer",
-            data: { minutes: "$value" },
-            options: ["off", 10, 20, 30, 60, 120],
+        repeat: { key_long_press: 600 },
+        keys: {
+          BACK_LONG_PRESS: {
+            service: "webostv.button",
+            data: { entity_id: "media_player.lg_webos_tv", button: "HOME" },
           },
         },
       };
@@ -355,36 +329,15 @@
       const configText = document.getElementById("configText");
       configText.value = JSON.stringify(BASE_CONFIG, null, 2);
 
-      let card = null;
-      // Home Assistant hands a card a new hass object, with a new states map,
-      // on every update, and leaves the previous one alone. Copy, never mutate
-      // in place: a card comparing the two would see its own change as no change.
-      let currentHass = hass;
+      const currentHass = hass;
 
       function build(config) {
         host.innerHTML = "";
-        card = document.createElement("lg-remote-control");
+        const card = document.createElement("lg-remote-control");
         card.hass = currentHass;
         card.setConfig(config);
         host.appendChild(card);
       }
-
-      document.getElementById("simulateTv").addEventListener("click", () => {
-        const value = String(document.getElementById("tvValue").value);
-        currentHass = {
-          ...currentHass,
-          states: {
-            ...currentHass.states,
-            "sensor.lg_tv_backlight": {
-              entity_id: "sensor.lg_tv_backlight",
-              state: value,
-              attributes: { unit_of_measurement: "%" },
-            },
-          },
-        };
-        if (card) card.hass = currentHass;
-        logCall("(harness)", { "backlight sensor": value });
-      });
 
       document.getElementById("apply").addEventListener("click", () => {
         try {

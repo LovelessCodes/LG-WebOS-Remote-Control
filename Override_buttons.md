@@ -58,18 +58,21 @@ available keys:
 - `"STOP"`
 - `"REWIND"`
 - `"RECORD"`
-- `"FAST_FOWARD"`
+- `"FAST_FORWARD"`
 - `"POWER"`
 - `"VOLUME_UP"`
 - `"VOLUME_DOWN"`
 
-`ENTER_LONG_PRESS` fires when the OK button is held past `repeat.ok_long_press` (default `1000` ms). The measured hold is available as `$value` in the override's `data`, in milliseconds. Without an override it sends the `MENU` button; see the README for a rooted-TV held-key example.
+`ENTER_LONG_PRESS` fires when the OK button is held past `repeat.ok_long_press` (default `1000` ms). The measured hold is available as `$value` in the override's `data`, in milliseconds. Without an override it sends the `MENU` button.
 
-## Virtual keys
+## Long-press keys
 
-These are not physical buttons. They are the controls added by the `settings:` block
-(backlight slider and sleep timer), and they can be remapped the same way. The data
-described there is what gets passed to the service, and `$value` is already substituted.
+Add `<KEY>_LONG_PRESS` for a long-press action on that key. Supported keys are `0`-`9`, `BACK`, `EXIT`, `INFO`, `MUTE`, `RED`, `GREEN`, `YELLOW`, `BLUE`, `PLAY`, `PAUSE`, `STOP`, `REWIND`, `RECORD`, `FAST_FORWARD` and `POWER`. The delay is `repeat.key_long_press` (default `600` ms), and the measured hold is available as `$value`.
 
-- `"BACKLIGHT"`
-- `"SLEEP_TIMER"`
+## Text keys
+
+- `"TEXT_SEND"`
+- `"TEXT_DELETE"`
+- `"TEXT_ENTER"`
+
+`TEXT_SEND` receives the typed text as `$value`; the other two take no value.

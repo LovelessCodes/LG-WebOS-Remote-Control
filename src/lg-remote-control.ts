@@ -21,25 +21,6 @@ import { remoteStyles } from "./lg-remote-control.styles";
 import { HomeAssistantFixed, WindowWithCards } from "./types";
 import { getMediaPlayerEntitiesByPlatform, substituteValue } from "./utils";
 
-interface SettingsValueCall {
-  service: string;
-  data?: Record<string, unknown>;
-  options?: Array<string | number>;
-  default?: string | number;
-}
-
-// The backlight can also mirror an entity. Its real value is stored on the TV,
-// which this card has no way to read, so a sensor fed by the same script is how
-// it gets back here.
-interface SettingsBacklightCall extends SettingsValueCall {
-  entity?: string;
-}
-
-interface SettingsControls {
-  backlight?: SettingsBacklightCall;
-  sleep_timer?: SettingsValueCall;
-}
-
 interface LgRemoteConfig {
   entity: string;
   ampli_entity?: string;
@@ -56,6 +37,7 @@ interface LgRemoteConfig {
     debug?: boolean;
     home_long_press?: number;
     ok_long_press?: number;
+    key_long_press?: number;
   };
   hold_delay?: number;
   hold_interval?: number;
@@ -64,14 +46,7 @@ interface LgRemoteConfig {
   sources?: Array<{ name: string; icon: string }>;
   channels?: unknown;
   color_buttons?: boolean;
-  settings?: SettingsControls;
 }
-
-const SLEEP_TIMER_OPTIONS: Array<string | number> = ["off", 10, 20, 30, 60, 90, 120, 180, 240];
-
-// after a drag the local value wins for this long, so the slider does not snap
-// back to a sensor that has not caught up yet
-const BACKLIGHT_HOLD_MS = 120000;
 
 const line1 = "  LG WebOS Remote Control Card  ";
 const line2 = `  version: ${CARD_VERSION}  `;
@@ -113,11 +88,12 @@ export class LgRemoteControl extends LitElement {
   declare private volume_value: number;
   declare private soundOutput: string;
   declare private output_entity: string;
-  declare private backlight_value?: number;
-  private backlight_held_until?: number;
-  declare private sleep_timer_value?: string;
-  declare private _settings_dragging: string;
+  declare private _text_value: string;
   private valueDisplayTimeout: ReturnType<typeof setTimeout> | undefined;
+  private keyLongPressTimer: ReturnType<typeof setTimeout> | undefined;
+  private keyLongPressStartedAt = 0;
+  private keyLongPressSuppressedKey: string | null = null;
+  private keyLongPressSuppressUntil = 0;
   private homeIsLongPress: boolean = false;
   private homeLongPressTimer: ReturnType<typeof setTimeout> | undefined;
   private okIsLongPress: boolean = false;
@@ -164,9 +140,7 @@ export class LgRemoteControl extends LitElement {
       volume_value: { state: true },
       soundOutput: { state: true },
       output_entity: { state: true },
-      backlight_value: { state: true },
-      sleep_timer_value: { state: true },
-      _settings_dragging: { state: true },
+      _text_value: { state: true },
     };
   }
 
@@ -181,20 +155,14 @@ export class LgRemoteControl extends LitElement {
       changed.has("volume_value") ||
       changed.has("soundOutput") ||
       changed.has("output_entity") ||
-      changed.has("backlight_value") ||
-      changed.has("sleep_timer_value") ||
-      changed.has("_settings_dragging") ||
+      changed.has("_text_value") ||
       changed.has("config")
     )
       return true;
     if (!changed.has("hass")) return super.shouldUpdate(changed);
     const oldHass: any = changed.get("hass");
     if (!oldHass) return true;
-    const keys = [
-      this.config?.entity,
-      this.config?.ampli_entity,
-      this.config?.settings?.backlight?.entity,
-    ].filter(Boolean);
+    const keys = [this.config?.entity, this.config?.ampli_entity].filter(Boolean);
     for (const k of keys) if (oldHass.states?.[k] !== this.hass.states?.[k]) return true;
     return false;
   }
@@ -208,7 +176,7 @@ export class LgRemoteControl extends LitElement {
     this._show_vol_text = false;
     this.volume_value = 0;
     this.soundOutput = "";
-    this._settings_dragging = "";
+    this._text_value = "";
     this._directionCtrl = new HoldRepeatController(
       () => this._repeatDelay,
       () => this._repeatInterval,
@@ -247,9 +215,13 @@ export class LgRemoteControl extends LitElement {
         <div
           class="page"
           style="box-sizing: border-box; --remote-button-color: ${buttonColor}; --remote-text-color: ${textColor}; --remote-color: ${backgroundColor}; --remotewidth: ${remoteWidth};  --main-border-color: ${borderColor}; --main-border-width: ${borderWidth}"
+          @pointerdown=${(e: PointerEvent) => this._onLongPressPointerDown(e)}
+          @pointerup=${(e: PointerEvent) => this._onLongPressPointerUp(e)}
+          @pointercancel=${(e: PointerEvent) => this._onLongPressPointerCancel(e)}
+          @pointerleave=${(e: PointerEvent) => this._onLongPressPointerCancel(e)}
         >
           ${this._renderTitle(tvNameColor)} ${this._renderPower(stateObj, mac, textColor, remoteWidth)}
-          ${this._renderCenter(stateObj, backgroundColor)} ${this._renderSources()} ${this._renderColorButtons()} ${this._renderSettings()} ${this._renderVolumeChannel(stateObj)} ${this._renderMediaControls()}
+          ${this._renderCenter(stateObj, backgroundColor)} ${this._renderSources()} ${this._renderColorButtons()} ${this._renderVolumeChannel(stateObj)} ${this._renderMediaControls()}
                         </div>
         </div>
       </div>
@@ -305,151 +277,12 @@ export class LgRemoteControl extends LitElement {
         (c) =>
           html`<button
             class="btn-color ripple"
+            data-long-press-key=${c.toUpperCase()}
             style="background-color: ${c}; height: calc(var(--remotewidth) / 12);"
             @click=${() => this._button(c.toUpperCase())}
           ></button>`,
       )}
     </div>`;
-  }
-
-  /*
-   * Optional backlight / sleep timer controls. They render only when the
-   * matching block is configured, and they call whatever service the user
-   * gives: reaching these TV APIs needs root on the TV (see README), which
-   * this card cannot do from the browser.
-   */
-  private _renderSettings() {
-    const cfg = this.config?.settings;
-    if (!this._isSettingsCall(cfg?.backlight) && !this._isSettingsCall(cfg?.sleep_timer)) {
-      return html``;
-    }
-    return html`<div class="grid-container-settings">
-      ${this._renderBacklight()} ${this._renderSleepTimer()}
-    </div>`;
-  }
-
-  private _isSettingsCall(call?: SettingsValueCall): boolean {
-    return typeof call?.service === "string" && call.service.includes(".");
-  }
-
-  /*
-   * One slider, shaped like the ones Bubble Card draws: a pill whose accent
-   * fill slides in from the left, with the icon and the value riding on top of
-   * it. The input is the real control, invisible over the pill, so the whole
-   * track drags while the browser keeps it keyboard reachable.
-   */
-  private _renderSlider(
-    key: string,
-    icon: string,
-    label: string,
-    percent: number,
-    max: number,
-    value: number,
-    onDrag: (value: number) => void,
-    onCommit: () => void,
-  ) {
-    return html`<div
-      class="slider ${this._settings_dragging === key ? "is-dragging" : ""}"
-      style="--slider-fill-at: ${Math.max(0, Math.min(100, percent))}"
-    >
-      <div class="slider-fill"></div>
-      <ha-icon class="slider-icon" icon="${icon}"></ha-icon>
-      <span class="slider-value">${label}</span>
-      <input
-        class="slider-input"
-        type="range"
-        min="0"
-        max="${max}"
-        step="1"
-        .value=${String(value)}
-        @input=${(e: Event) => {
-          this._settings_dragging = key;
-          onDrag(Number((e.target as HTMLInputElement).value));
-        }}
-        @change=${() => {
-          this._settings_dragging = "";
-          onCommit();
-        }}
-      />
-    </div>`;
-  }
-
-  private _renderBacklight() {
-    const cfg = this.config?.settings?.backlight;
-    if (!this._isSettingsCall(cfg)) return html``;
-    const current = this._backlightShown(cfg);
-    return this._renderSlider(
-      "backlight",
-      "mdi:brightness-6",
-      String(current),
-      current,
-      100,
-      current,
-      (value) => {
-        this.backlight_value = value;
-        this.backlight_held_until = Date.now() + BACKLIGHT_HOLD_MS;
-      },
-      () => this._callSettingsService("BACKLIGHT", cfg, this.backlight_value),
-    );
-  }
-
-  /*
-   * What the slider shows. With `entity` configured, the value comes from Home
-   * Assistant, which is the only way back: the TV stores it and this card
-   * cannot ask. A drag holds the local value for a moment so the slider does
-   * not jump back to a sensor that has not polled yet.
-   */
-  private _backlightShown(cfg: SettingsBacklightCall): number {
-    const clamp = (n: number): number => Math.max(0, Math.min(100, Math.round(n)));
-    const held = this.backlight_held_until !== undefined && Date.now() < this.backlight_held_until;
-    if (!held && cfg.entity) {
-      const fromEntity = Number(this.hass?.states?.[cfg.entity]?.state);
-      if (Number.isFinite(fromEntity)) return clamp(fromEntity);
-    }
-    const local = Number(this.backlight_value ?? cfg.default ?? 100);
-    return clamp(Number.isFinite(local) ? local : 100);
-  }
-
-  /*
-   * The timer slider snaps to the configured options, one detent each, so the
-   * fill reads as "how far into the list" rather than as minutes: `off` sits
-   * at the empty end and the longest option fills the pill.
-   */
-  private _renderSleepTimer() {
-    const cfg = this.config?.settings?.sleep_timer;
-    if (!this._isSettingsCall(cfg)) return html``;
-    const options = cfg.options?.length ? cfg.options : SLEEP_TIMER_OPTIONS;
-    const index = this._sleepTimerIndex(cfg, options);
-    const steps = Math.max(1, options.length - 1);
-    return this._renderSlider(
-      "sleep_timer",
-      "mdi:timer-outline",
-      this._sleepTimerLabel(options[index]),
-      (index / steps) * 100,
-      options.length - 1,
-      index,
-      (value) => {
-        this.sleep_timer_value = String(options[value]);
-      },
-      () =>
-        this._callSettingsService("SLEEP_TIMER", cfg, options[this._sleepTimerIndex(cfg, options)]),
-    );
-  }
-
-  private _sleepTimerIndex(cfg: SettingsValueCall, options: Array<string | number>): number {
-    const selected = this.sleep_timer_value ?? `${cfg.default ?? ""}`;
-    const index = options.findIndex((option) => String(option) === selected);
-    return index === -1 ? 0 : index;
-  }
-
-  private _sleepTimerLabel(option: string | number): string {
-    return option === "off" ? "Off" : String(option);
-  }
-
-  private _callSettingsService(key: string, cfg: SettingsValueCall, value: unknown) {
-    const data = substituteValue(cfg.data ?? {}, value);
-    this._debugLog(`settings ${key} value=${value} service=${cfg.service}`);
-    this.callServiceFromConfig(key, cfg.service, data);
   }
 
   private _renderVolumeChannel(stateObj: any) {
@@ -459,10 +292,10 @@ export class LgRemoteControl extends LitElement {
       <button class="btn-flat flat-high ripple" id="homeButton" style="margin-top: 0px; height: 50%; touch-action: none;" @pointerdown=${(e: PointerEvent) => this._homePointerDown(e)} @pointerup=${(e: PointerEvent) => this._homePointerUp(e)} @pointercancel=${(e: PointerEvent) => this._homePointerCancel(e)} @pointerleave=${(e: PointerEvent) => this._homePointerCancel(e)}><ha-icon icon="mdi:home"></ha-icon></button>
       <button class="btn ripple" style="border-radius: 50% 50% 0px 0px; margin: 0px auto 0px auto; height: 100%;" @click=${() => this._button("CHANNELUP")}><ha-icon icon="mdi:chevron-up" /></button>
       <button class="btn" style="border-radius: 0px; cursor: default; margin: 0px auto 0px auto; height: 100%;"><ha-icon icon="${muted ? "mdi:volume-off" : "mdi:volume-high"}" /></button>
-      <button class="btn ripple" style="color:${muted ? "red" : ""}; height: 100%;" @click=${() => this._button("MUTE")}><span class="${muted ? "blink" : ""}"><ha-icon icon="mdi:volume-mute"></span></button>
+      <button class="btn ripple" data-long-press-key="MUTE" style="color:${muted ? "red" : ""}; height: 100%;" @click=${() => this._button("MUTE")}><span class="${muted ? "blink" : ""}"><ha-icon icon="mdi:volume-mute"></span></button>
       <button class="btn" style="border-radius: 0px; cursor: default; margin: 0px auto 0px auto; height: 100%;"><ha-icon icon="mdi:volume-medium" /></button>
       <button class="btn ripple" id="minusButton" style="border-radius: 0px 0px 50% 50%; margin: 0px auto 0px auto; height: 100%; touch-action: none;" @pointerdown=${(e: PointerEvent) => this._onVolumePointerDown("volume_down", e)} @pointerup=${(e: PointerEvent) => this._onVolumePointerUp(e)} @pointercancel=${(e: PointerEvent) => this._onVolumePointerCancel(e)} @pointerleave=${(e: PointerEvent) => this._onVolumePointerCancel(e)} @click=${(e: Event) => this._onVolumeClick("volume_down", e)}><ha-icon icon="mdi:minus" /></button>
-      <button class="btn-flat flat-high ripple" style="margin-bottom: 0px; height: 50%;" @click=${() => this._button("INFO")}><ha-icon icon="mdi:information-variant" /></button>
+      <button class="btn-flat flat-high ripple" data-long-press-key="INFO" style="margin-bottom: 0px; height: 50%;" @click=${() => this._button("INFO")}><ha-icon icon="mdi:information-variant" /></button>
       <button class="btn ripple" style="border-radius: 0px 0px 50% 50%;  margin: 0px auto 0px auto; height: 100%;" @click=${() => this._button("CHANNELDOWN")}><ha-icon icon="mdi:chevron-down" /></button>
     </div>`;
   }
@@ -471,30 +304,35 @@ export class LgRemoteControl extends LitElement {
     return html`<div class="grid-container-media-control">
       <button
         class="btn-flat flat-low ripple"
+        data-long-press-key="PLAY"
         @click=${() => this._command("PLAY", "media.controls/play")}
       >
         <ha-icon icon="mdi:play" />
       </button>
       <button
         class="btn-flat flat-low ripple"
+        data-long-press-key="PAUSE"
         @click=${() => this._command("PAUSE", "media.controls/pause")}
       >
         <ha-icon icon="mdi:pause" />
       </button>
       <button
         class="btn-flat flat-low ripple"
+        data-long-press-key="STOP"
         @click=${() => this._command("STOP", "media.controls/stop")}
       >
         <ha-icon icon="mdi:stop" />
       </button>
       <button
         class="btn-flat flat-low ripple"
+        data-long-press-key="REWIND"
         @click=${() => this._command("REWIND", "media.controls/rewind")}
       >
         <ha-icon icon="mdi:skip-backward" />
       </button>
       <button
         class="btn-flat flat-low ripple"
+        data-long-press-key="RECORD"
         style="color: red;"
         @click=${() => this._command("RECORD", "media.controls/Record")}
       >
@@ -502,6 +340,7 @@ export class LgRemoteControl extends LitElement {
       </button>
       <button
         class="btn-flat flat-low ripple"
+        data-long-press-key="FAST_FORWARD"
         @click=${() => this._command("FAST_FORWARD", "media.controls/fastForward")}
       >
         <ha-icon icon="mdi:skip-forward" />
@@ -524,6 +363,8 @@ export class LgRemoteControl extends LitElement {
           ? html`<button
               type="button"
               class="btn ripple"
+              data-long-press-key="POWER"
+              aria-label="Power on"
               @click=${() => this._media_player_turn_on(mac)}
             >
               <ha-icon icon="mdi:power" style="color: ${textColor};" />
@@ -531,6 +372,8 @@ export class LgRemoteControl extends LitElement {
           : html`<button
               type="button"
               class="btn ripple"
+              data-long-press-key="POWER"
+              aria-label="Power off"
               @click=${() => this._media_player_service("POWER", "turn_off")}
             >
               <ha-icon icon="mdi:power" style="color: red;" />
@@ -659,15 +502,112 @@ export class LgRemoteControl extends LitElement {
     </div>`;
   }
   private _renderKeypad() {
-    return html`<div class="grid-container-keypad">
-      ${["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((n) => html`<button type="button" class="btn-keypad ripple" @click=${() => this._button(n)}>${n}</button>`)}<button
-        type="button"
-        class="btn-keypad"
-      ></button
-      ><button type="button" class="btn-keypad ripple" @click=${() => this._button("0")}>0</button
-      ><button type="button" class="btn-keypad"></button>
+    return html`<div class="keypad-panel">
+      <div class="keypad-text-row">
+        <input
+          class="keypad-text"
+          type="text"
+          placeholder="Type on TV"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          .value=${this._text_value}
+          @input=${(e: Event) => this._onTextInput(e)}
+          @keydown=${(e: KeyboardEvent) => this._onTextKeyDown(e)}
+        />
+        <button
+          type="button"
+          class="btn-keypad keypad-send"
+          aria-label="Send text"
+          @click=${() => this._sendText()}
+        >
+          <ha-icon icon="mdi:send" />
+        </button>
+      </div>
+      <div class="grid-container-keypad">
+        ${["1", "2", "3", "4", "5", "6", "7", "8", "9"].map(
+          (n) => html`<button
+            type="button"
+            class="btn-keypad ripple"
+            data-long-press-key=${n}
+            @click=${() => this._button(n)}
+          >
+            ${n}
+          </button>`,
+        )}<button
+          type="button"
+          class="btn-keypad ripple"
+          aria-label="Backspace"
+          @click=${() => this._deleteText()}
+        >
+          <ha-icon icon="mdi:backspace-outline" /></button
+        ><button
+          type="button"
+          class="btn-keypad ripple"
+          data-long-press-key="0"
+          @click=${() => this._button("0")}
+        >
+          0</button
+        ><button
+          type="button"
+          class="btn-keypad ripple"
+          aria-label="Enter"
+          @click=${() => this._enterText()}
+        >
+          <ha-icon icon="mdi:keyboard-return" />
+        </button>
+      </div>
     </div>`;
   }
+  private _onTextInput(e: Event) {
+    this._text_value = (e.target as HTMLInputElement).value;
+  }
+
+  private _onTextKeyDown(e: KeyboardEvent) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      this._enterText();
+    }
+  }
+
+  private _sendText() {
+    const text = this._text_value;
+    if (!text) return;
+    this._debugLog(`text send ${text.length} chars`);
+    this.callServiceFromConfig(
+      "TEXT_SEND",
+      "webostv.command",
+      {
+        entity_id: this.config.entity,
+        command: "com.webos.service.ime/insertText",
+        payload: { text, replace: false },
+      },
+      text,
+    );
+    this._text_value = "";
+  }
+
+  private _deleteText() {
+    if (this._text_value) {
+      this._text_value = this._text_value.slice(0, -1);
+      return;
+    }
+    this.callServiceFromConfig("TEXT_DELETE", "webostv.command", {
+      entity_id: this.config.entity,
+      command: "com.webos.service.ime/deleteCharacters",
+      payload: { count: 1 },
+    });
+  }
+
+  private _enterText() {
+    if (this._text_value) this._sendText();
+    this.callServiceFromConfig("TEXT_ENTER", "webostv.command", {
+      entity_id: this.config.entity,
+      command: "com.webos.service.ime/sendEnterKey",
+      payload: {},
+    });
+  }
+
   private _renderDpad(backgroundColor: string) {
     return html`<div class="grid-container-cursor">
       <div class="shape">
@@ -742,7 +682,13 @@ export class LgRemoteControl extends LitElement {
       >
         <ha-icon icon="mdi:chevron-right" />
       </button>
-      <button type="button" class="btn ripple item_back" @click=${() => this._button("BACK")}>
+      <button
+        type="button"
+        class="btn ripple item_back"
+        data-long-press-key="BACK"
+        aria-label="Back"
+        @click=${() => this._button("BACK")}
+      >
         <ha-icon icon="mdi:undo-variant" />
       </button>
       <button
@@ -757,7 +703,13 @@ export class LgRemoteControl extends LitElement {
       >
         <ha-icon icon="mdi:chevron-down" />
       </button>
-      <button type="button" class="btn ripple item_exit" @click=${() => this._button("EXIT")}>
+      <button
+        type="button"
+        class="btn ripple item_exit"
+        data-long-press-key="EXIT"
+        aria-label="Exit"
+        @click=${() => this._button("EXIT")}
+      >
         EXIT
       </button>
     </div>`;
@@ -818,6 +770,7 @@ export class LgRemoteControl extends LitElement {
 
   firstUpdated(changedProperties) {
     super.firstUpdated(changedProperties);
+    this.shadowRoot?.addEventListener("click", this._onLongPressClickCapture, true);
     // volume hold now handled via pointer events in template (_onVolumePointerDown etc.)
     // kept for future init if needed; no legacy mousedown/touch listeners (removed to avoid double-fire)
     this._debugLog(
@@ -977,6 +930,79 @@ export class LgRemoteControl extends LitElement {
     return isNaN(n) ? 1000 : Math.max(300, Math.min(3000, n));
   }
 
+  private get _keyLongPressDelay(): number {
+    const v = this.config?.repeat?.key_long_press ?? 600;
+    const n = Number(v);
+    return isNaN(n) ? 600 : Math.max(200, Math.min(3000, n));
+  }
+
+  private _onLongPressPointerDown(e: PointerEvent) {
+    const button = (e.target as Element)?.closest?.(
+      "button[data-long-press-key]",
+    ) as HTMLElement | null;
+    if (!button) return;
+    const key = button.dataset.longPressKey;
+    if (!key || !this._hasLongPress(key)) return;
+    this.keyLongPressStartedAt = Date.now();
+    this.keyLongPressSuppressedKey = null;
+    this.keyLongPressSuppressUntil = 0;
+    clearTimeout(this.keyLongPressTimer);
+    this.keyLongPressTimer = setTimeout(() => {
+      const holdMs = Date.now() - this.keyLongPressStartedAt;
+      this.keyLongPressSuppressedKey = key;
+      this.keyLongPressSuppressUntil = Date.now() + 600;
+      this._fireLongPress(key, holdMs);
+    }, this._keyLongPressDelay);
+  }
+
+  private _onLongPressPointerUp(_e: PointerEvent) {
+    clearTimeout(this.keyLongPressTimer);
+    if (this.keyLongPressSuppressedKey) {
+      this.keyLongPressSuppressUntil = Date.now() + 600;
+    }
+    this.keyLongPressStartedAt = 0;
+  }
+
+  private _onLongPressPointerCancel(_e: PointerEvent) {
+    clearTimeout(this.keyLongPressTimer);
+    if (this.keyLongPressSuppressedKey) {
+      this.keyLongPressSuppressUntil = Date.now() + 600;
+    }
+    this.keyLongPressStartedAt = 0;
+  }
+
+  private _onLongPressClickCapture = (e: Event) => {
+    if (Date.now() >= this.keyLongPressSuppressUntil) {
+      this.keyLongPressSuppressedKey = null;
+      return;
+    }
+    const button = (e.target as Element)?.closest?.(
+      "button[data-long-press-key]",
+    ) as HTMLElement | null;
+    if (!button || button.dataset.longPressKey !== this.keyLongPressSuppressedKey) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    this.keyLongPressSuppressedKey = null;
+  };
+
+  private _hasLongPress(key: string): boolean {
+    const cfg = this.config?.keys?.[`${key}_LONG_PRESS`];
+    return typeof cfg?.service === "string" && cfg.service.includes(".");
+  }
+
+  private _fireLongPress(key: string, holdMs: number) {
+    this._debugLog(`long press ${key} (${holdMs}ms) -> ${key}_LONG_PRESS`);
+    this.callServiceFromConfig(
+      `${key}_LONG_PRESS`,
+      "webostv.button",
+      {
+        entity_id: this.config.entity,
+        button: key,
+      },
+      holdMs,
+    );
+  }
+
   private get _repeatDelay(): number {
     const v = this.config?.repeat?.delay ?? this.config?.hold_delay ?? 400;
     const n = Number(v);
@@ -1119,9 +1145,11 @@ export class LgRemoteControl extends LitElement {
     this._volumeCtrl?.destroy();
     clearTimeout(this.homeLongPressTimer);
     clearTimeout(this.okLongPressTimer);
+    clearTimeout(this.keyLongPressTimer);
     clearTimeout(this.valueDisplayTimeout);
     this.homeLongPressTimer = undefined;
     this.okLongPressTimer = undefined;
+    this.keyLongPressTimer = undefined;
     this.valueDisplayTimeout = undefined;
   }
 
